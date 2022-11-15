@@ -18,8 +18,6 @@ def main():
         cv.imshow("s", b[0])
         cv.waitKey(100)'''
 
-    get_c_idx(5)
-
     # test loss
     #yolov3_loss(None, None)
 

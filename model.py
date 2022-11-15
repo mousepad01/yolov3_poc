@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import cv2 as cv
 
 #   TODO:
 #       define residual layers used
@@ -50,7 +51,7 @@ class ResBlock(tf.keras.layers.Layer):
 
         return y
 
-
+# TODO
 def yolov3_loss(output, anchors):
     '''
         raw output: B x S x S x A x C + 5
@@ -58,6 +59,8 @@ def yolov3_loss(output, anchors):
     '''
     
     B, S, A, C = output.shape[0], output.shape[1], output.shape[3], output.shape[4] - 5
+
+    # TODO
     
 def get_c_idx(S):
     '''
@@ -129,15 +132,37 @@ def make_prediction(output, anchors, THRESHOLD=0.6):
 
     return output_xy_min, output_xy_max, output_class, output_class_maxp
 
-# FIXME
 def show_predictions(image, pred_xy_min, pred_xy_max, pred_class, pred_class_p):
-
-    IMG_PX_SIZE = image.shape[0]
 
     img_px_size = tf.convert_to_tensor(image.shape).reshape((1, 1, 1, 1, 2))
 
-    # absolute values, in pixels
-    output_xy = output_xy * img_px_size
-    output_wh = output_wh * img_px_size
-
+    pred_xy_min = pred_xy_min * img_px_size
+    pred_xy_max = pred_xy_max * img_px_size
     
+    pred_xy_min = tf.reshape(pred_xy_min, (pred_xy_min.shape[0], -1, 2))
+    pred_xy_max = tf.reshape(pred_xy_max, (pred_xy_max.shape[0], -1, 2))
+    pred_class = tf.reshape(pred_class, (pred_class.shape[0], -1))
+    pred_class_p = tf.reshape(pred_class_p, (pred_class_p.shape[0], -1))
+
+    assert(pred_xy_min.shape == pred_xy_max.shape)
+
+    for idx, img in enumerate(image):
+        
+        for box_idx in range(pred_xy_min[idx].shape[1]):
+            
+            x_min, y_min = pred_xy_min[idx][box_idx][0], pred_xy_min[idx][box_idx][1]
+            x_max, y_max = pred_xy_max[idx][box_idx][0], pred_xy_max[idx][box_idx][1]
+
+            predicted_class = pred_class[idx][box_idx]
+            predicted_class_p = pred_class_p[idx][box_idx]
+
+            # FIXME inverse x with y???? , and also fix color per class
+            cv.rectangle(img, (x_min, y_min), (x_max, y_max), color=(255, 0, 0), thickness=2)
+            # FIXME put class name instead of one hot encoding index, and also fix color per class
+            cv.putText(img, text=f"{predicted_class}: {predicted_class_p}%", org=(x_min, y_min - 10), font_face=cv.FONT_HERSHEY_SIMPLEX, color=(255, 0, 0), thickness=2)
+
+        cv.imshow(img)
+        if len(image) > 1:
+            cv.waitKey(1000)
+        else:
+            cv.waitKey(0)
