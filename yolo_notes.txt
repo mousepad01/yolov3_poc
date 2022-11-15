@@ -1,0 +1,38 @@
+yolo:
+* output S x S x (B * |{sqrt(H),sqrt(W),X,Y,Confidence}| + C) -> one class prediction per grid cell
+* output: 	h, w in [0, 1] wrt whole img
+		x, y in [0, 1] wrt grid cell dimension
+* pretrain (half res) w most of the layers on classification
+* activation leaky relu (0.1), last layer linear
+* non maximal suppression for inference
+
+yolov2:
+* batch norm between layers
+* pretrain with full res
+* network is fully convolutional 
+* anchor boxes with dimensionas determined with k-means on training data  
+* class predicted for each box instead of each grid cell
+	output: S x S x (B * |{tx,ty,tw,th,Confidence,Pc0,...Pck}|)
+* fine grained features (shortcut connection?)
+* train by randomly changing input image size every few batches
+* weight decay, data augmentation, etc
+* train with both obj detection and classification at the same time (during object detection train phase)
+* conditional probabilities for class prediction
+
+yolov3:
+* bounding box, coordinate predictions etc the same as yolov2 ???
+* each output for class predictions is created w a sigmoid (miltilabel classification)
+* cross entropy instead of mean squared loss for class predictions
+* at each scale (? - FPN?) 3 bounding boxes (B) => output S x S x (B * |{tx,ty,tw,th,Confidence,Pc0,...Pck}|) - same as yolov2?
+* anchor boxes prior sizes as in yolov2 (but at different scales?)
+* other observations:
+	- box prediction modifications generally do not work 
+	- focal loss does not work on yolo
+	- double IOU thresholds (???)
+* confidence redefined: when a box overlaps w a ground truth (and is selected for loss function),
+			in v1 and v2 the confidence is equal to the IOU of the overlap, 
+			now it is equal to 1
+
+yolov3 implem details:
+* predictions made by a 1x1 convolution to get the final shape (S x S x whatever => S x S x (B * |{tx,ty,tw,th,Confidence,Pc0,...Pck}|))
+* variations for the actual architecture?
