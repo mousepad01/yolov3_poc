@@ -1,0 +1,5 @@
+PoC implementation of YOLOv3
+Sources of documentation:
+    * original papers of YOLOv1, YOLOv2, YOLOv3
+    * implementation of YOLOv2 from https://github.com/allanzelener/YAD2K
+Changes have been made compared to the original model

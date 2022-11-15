@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import cv2 as cv
 import json
 
 class DataManager:
@@ -14,14 +15,16 @@ class DataManager:
     TRAIN_INFO_PATH = "./data/annotations/instances_train2017.json"
     VALIDATION_INFO_PATH = "./data/annotations/instances_val2017.json"
 
-    DATA_LOAD_BATCH_SIZE = 1024
+    DATA_LOAD_BATCH_SIZE = 128
+    IMG_SIZE = (416, 416)
 
     def __init__(self, train_data_path=TRAIN_DATA_PATH,
                         train_info_path=TRAIN_INFO_PATH,
                         validation_data_path=VALIDATION_DATA_PATH,
                         validation_info_path=VALIDATION_INFO_PATH,
 
-                        data_load_batch_size=DATA_LOAD_BATCH_SIZE
+                        data_load_batch_size=DATA_LOAD_BATCH_SIZE,
+                        img_size=IMG_SIZE,
                     ):
         
         self.data_path = {
@@ -42,30 +45,42 @@ class DataManager:
 
         self.data_load_batch_size = data_load_batch_size
 
-    def load_images(self, purpose):
+        self.img_size = img_size
+
+    def load_images(self, purpose, reshape_and_tensor=True):
         '''
             generator, for lazy loading
             purpose: "train" | "validation"
+            reshape_and_tensor: bool, return in a list or a tensor of reshaped imgs
         '''
-
-        def _filename(img_id):
-
-            name = f"{img_id}"
-            name = "0" * (12 - len(name)) + name + ".jpg"
-            return name
         
         if self.used_categories == {}:
             print("info not yet loaded")
             quit()
 
         current_loaded = []
-        for img_id in self.bbox.keys():
+        for img_id in self.imgs[purpose].keys():
 
-            current_loaded.append(open(self.data_path[purpose] + _filename(img_id), "r").read())
+            img = cv.imread(self.data_path[purpose] + self.imgs[purpose][img_id]["filename"])
+            if reshape_and_tensor:
+                img = cv.resize(img, self.img_size)
+
+            current_loaded.append(img)
 
             if len(current_loaded) == self.data_load_batch_size:
-                yield tf.tensor(current_loaded)
+
+                if reshape_and_tensor:
+                    current_loaded = tf.convert_to_tensor(current_loaded)
+
+                yield current_loaded
                 current_loaded = []
+
+        if len(current_loaded) > 0:
+
+            if reshape_and_tensor:
+                current_loaded = tf.convert_to_tensor(current_loaded)
+
+            yield current_loaded
 
     def load_info(self):
         '''
@@ -99,7 +114,8 @@ class DataManager:
                     self.imgs[purpose][anno["image_id"]] = {
                                                                 "w": None,
                                                                 "h": None,
-                                                                "objs": []
+                                                                "objs": [],
+                                                                "filename": ""
                     }
 
                 self.imgs[purpose][anno["image_id"]]["objs"].append({
@@ -114,6 +130,4 @@ class DataManager:
 
                 self.imgs[purpose][img_info["id"]]["w"] = img_info["width"]
                 self.imgs[purpose][img_info["id"]]["h"] = img_info["height"]
-
-            for img in self.imgs[purpose].items():
-                print(img)
+                self.imgs[purpose][img_info["id"]]["filename"] = img_info["file_name"]
