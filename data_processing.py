@@ -151,6 +151,12 @@ class DataManager:
         self.anchors = anchor_finder.get_anchors()
 
     def resize_with_pad(self, img):
+        '''
+            returns:
+            * resized image with black symmetrical padding
+            * offset(s) to add to absolute coordinates
+            * ratio to multiply with absolute coordinates
+        '''
 
         w, h = img.shape[0], img.shape[1]
 
@@ -167,6 +173,8 @@ class DataManager:
             padr = np.zeros((q2, h, 3), dtype=np.uint8)
         
             img = np.concatenate([padl, img, padr], 0)
+            off = (q1, 0)
+            ratio = self.img_size[0] / h
 
         elif h < w:
 
@@ -181,8 +189,10 @@ class DataManager:
             padr = np.zeros((w, q2, 3), dtype=np.uint8)
 
             img = np.concatenate([padl, img, padr], 1)
+            off = (0, q1)
+            ratio = self.img_size[0] / w
 
-        return cv.resize(img, self.img_size), self.img_size[0] / max(w, h)
+        return cv.resize(img, self.img_size), off, ratio
 
     def assign_anchors_to_objects(self):
 
