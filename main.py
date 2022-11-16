@@ -11,7 +11,7 @@ def main():
     #FIXME
     data_manager = DataManager(train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH)
     data_manager.load_info()
-
+    
     # test loading images
     '''for b in data_manager.load_images("train", False):
         

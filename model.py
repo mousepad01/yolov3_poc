@@ -52,7 +52,8 @@ class ResBlock(tf.keras.layers.Layer):
         return y
 
 # TODO
-def yolov3_loss(output, anchors):
+@tf.function
+def yolov3_loss_persize(output, anchors):
     '''
         raw output: B x S x S x A x C + 5
         anchors: A x 2
@@ -60,14 +61,28 @@ def yolov3_loss(output, anchors):
     
     B, S, A, C = output.shape[0], output.shape[1], output.shape[3], output.shape[4] - 5
 
+    # TODO remove later
+    assert(A == anchors.shape[0])
+
+    anchors = tf.reshape(anchors, (1, 1, 1, A, 2))
+
+    output_xy = tf.concat(tf.sigmoid(output[..., 0:2]), output[..., 2:4], axis=-1)
+    # TODO try the other version where w and h are used as exponent in the loss
+    # output_xy = tf.concat(tf.sigmoid(output[..., 0:2]), tf.exp(output[..., 2:4]), axis=-1)
+
     # TODO
+
+# TODO
+@tf.function
+def yolov3_loss():
+    pass
     
+@tf.function
 def get_c_idx(S):
     '''
-        returns array of shape 1 x S x S x 1 x 2 -> (i, j) in S x S
+        calculate array of shape 1 x S x S x 1 x 2 -> (i, j) in S x S
     '''
 
-    all_idx = [i for i in range(S)]
     all_idx = tf.range(0, S)
 
     h_idx = tf.tile(all_idx, (S,))
@@ -84,7 +99,9 @@ def get_c_idx(S):
 
     return c_idx
 
-def make_prediction(output, anchors, THRESHOLD=0.6):
+# FIXME ??? for a single size / multiple
+@tf.function
+def make_prediction_persize(output, anchors, THRESHOLD=0.6):
     '''
         output: B x S x S x A x C + 5
         anchors: A x 2
@@ -93,7 +110,7 @@ def make_prediction(output, anchors, THRESHOLD=0.6):
     B, S, A, C = output.shape[0], output.shape[1], output.shape[3], output.shape[4] - 5
 
     # TODO remove later
-    assert(A == anchors.shape[0])
+    # assert(A == anchors.shape[0])
 
     anchors = tf.reshape(anchors, (1, 1, 1, A, 2))
 
@@ -132,6 +149,7 @@ def make_prediction(output, anchors, THRESHOLD=0.6):
 
     return output_xy_min, output_xy_max, output_class, output_class_maxp
 
+# FIXME this is for just one size
 def show_predictions(image, pred_xy_min, pred_xy_max, pred_class, pred_class_p):
 
     img_px_size = tf.convert_to_tensor(image.shape).reshape((1, 1, 1, 1, 2))
@@ -156,10 +174,8 @@ def show_predictions(image, pred_xy_min, pred_xy_max, pred_class, pred_class_p):
             predicted_class = pred_class[idx][box_idx]
             predicted_class_p = pred_class_p[idx][box_idx]
 
-            # FIXME inverse x with y???? , and also fix color per class
-            cv.rectangle(img, (x_min, y_min), (x_max, y_max), color=(255, 0, 0), thickness=2)
-            # FIXME put class name instead of one hot encoding index, and also fix color per class
-            cv.putText(img, text=f"{predicted_class}: {predicted_class_p}%", org=(x_min, y_min - 10), font_face=cv.FONT_HERSHEY_SIMPLEX, color=(255, 0, 0), thickness=2)
+            cv.rectangle(img, (y_min, x_min), (y_max, x_max), color=(0, 0, 255), thickness=2)
+            cv.putText(img, text=f"{predicted_class}: {predicted_class_p}%", org=(y_min - 10, x_min), font_face=cv.FONT_HERSHEY_SIMPLEX, color=(0, 0, 255), thickness=2)
 
         cv.imshow(img)
         if len(image) > 1:
