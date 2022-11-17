@@ -62,6 +62,35 @@ class DataManager:
             generator, for lazy loading
             purpose: "train" | "validation"
         '''
+
+        def _resize_with_pad(img):
+            '''
+                returns resized image with black symmetrical padding
+            '''
+
+            w, h = img.shape[0], img.shape[1]
+
+            if w < h:
+
+                q1 = (h - w) // 2
+                q2 = h - w - q1
+
+                padl = np.zeros((q1, h, 3), dtype=np.uint8)
+                padr = np.zeros((q2, h, 3), dtype=np.uint8)
+            
+                img = np.concatenate([padl, img, padr], 0)
+
+            elif h < w:
+
+                q1 = (w - h) // 2
+                q2 = w - h - q1
+
+                padl = np.zeros((w, q1, 3), dtype=np.uint8)
+                padr = np.zeros((w, q2, 3), dtype=np.uint8)
+
+                img = np.concatenate([padl, img, padr], 1)
+
+            return cv.resize(img, self.img_size)
         
         if self.used_categories == {}:
             print("info not yet loaded")
@@ -71,7 +100,7 @@ class DataManager:
         for img_id in self.imgs[purpose].keys():
 
             img = cv.imread(self.data_path[purpose] + self.imgs[purpose][img_id]["filename"])
-            img = cv.resize(img, self.img_size)
+            img = _resize_with_pad(img)
 
             current_loaded.append(img)
 
@@ -149,9 +178,10 @@ class DataManager:
                                                                 "filename": ""
                                                             }
 
+                # h, w intentionally reverted
                 self.imgs[purpose][anno["image_id"]]["objs"].append({
                                                                         "category_id": anno["category_id"],
-                                                                        "bbox": anno["bbox"]
+                                                                        "bbox": (anno["bbox"][1], anno["bbox"][0], anno["bbox"][3], anno["bbox"][2]) 
                                                                     })
             
             for img_info in info["images"]:
@@ -161,14 +191,29 @@ class DataManager:
                 
                 self.imgs[purpose][img_info["id"]]["filename"] = img_info["file_name"]
 
-                # adjust bbox absolute coordinates for a reshape with padding, and reverse x with y, h with w
-                w = img_info["width"]
-                h = img_info["height"]
+                # h, w intentionally inverted
+                h = img_info["width"]
+                w = img_info["height"]
 
-                
+                off, ratio = _find_resize_factors(w, h)
 
-                # TODO
-                
+                if off[0] > 0:
+
+                    for bbox_d in self.imgs[purpose][img_info["id"]]["objs"]:
+                        bbox_d["bbox"] = (off[0] + bbox_d["bbox"][0], bbox_d["bbox"][1], 
+                                            bbox_d["bbox"][2], bbox_d["bbox"][3])
+
+                elif off[1] > 0:
+
+                    for bbox_d in self.imgs[purpose][img_info["id"]]["objs"]:
+                        bbox_d["bbox"] = (bbox_d["bbox"][0], off[1] + bbox_d["bbox"][1], 
+                                            bbox_d["bbox"][2], bbox_d["bbox"][3])
+   
+                for bbox_d in self.imgs[purpose][img_info["id"]]["objs"]:
+                    bbox_d["bbox"] = (np.floor(ratio * bbox_d["bbox"][0]), np.floor(ratio * bbox_d["bbox"][1]), 
+                                        np.floor(ratio * bbox_d["bbox"][2]), np.floor(ratio * bbox_d["bbox"][3]))
+
+    # FIXME
     def determine_anchors(self):
 
         if self.used_categories == {}:
@@ -177,38 +222,6 @@ class DataManager:
 
         anchor_finder = AnchorFinder(self.imgs)
         self.anchors = anchor_finder.get_anchors()
-
-    # FIXME
-    def resize_with_pad(self, img, img_id):
-        '''
-            returns resized image with black symmetrical padding
-        '''
-
-        w, h = img.shape[0], img.shape[1]
-
-        if w < h:
-
-            q1 = (h - w) // 2
-            q2 = h - w - q1
-
-            padl = np.zeros((q1, h, 3), dtype=np.uint8)
-            padr = np.zeros((q2, h, 3), dtype=np.uint8)
-        
-            img = np.concatenate([padl, img, padr], 0)
-
-        elif h < w:
-
-            q1 = (w - h) // 2
-            q2 = w - h - q1
-
-            padl = np.zeros((w, q1, 3), dtype=np.uint8)
-            padr = np.zeros((w, q2, 3), dtype=np.uint8)
-
-            img = np.concatenate([padl, img, padr], 1)
-
-        assert(img.shape[0] == img.shape[1])
-
-        return cv.resize(img, self.img_size)
 
     def assign_anchors_to_objects(self):
         pass
