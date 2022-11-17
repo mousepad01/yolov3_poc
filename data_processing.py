@@ -94,6 +94,32 @@ class DataManager:
                 (the image itself will be resized when loaded in load_images())
         '''
 
+        def _find_resize_factors(w, h):
+            '''
+                returns:
+                    * offset(s) to add to absolute coordinates
+                    * ratio to multiply with absolute coordinates
+            '''
+
+            off = (0, 0)
+            ratio = 1
+
+            if w < h:
+
+                q1 = (h - w) // 2
+
+                off = (q1, 0)
+                ratio = self.img_size[0] / h
+
+            elif h < w:
+
+                q1 = (w - h) // 2
+
+                off = (0, q1)
+                ratio = self.img_size[0] / w
+
+            return off, ratio
+
         for purpose in ["train", "validation"]:
 
             with open(self.info_path[purpose], "r") as info_f:
@@ -139,6 +165,8 @@ class DataManager:
                 w = img_info["width"]
                 h = img_info["height"]
 
+                
+
                 # TODO
                 
     def determine_anchors(self):
@@ -150,50 +178,37 @@ class DataManager:
         anchor_finder = AnchorFinder(self.imgs)
         self.anchors = anchor_finder.get_anchors()
 
-    def resize_with_pad(self, img):
+    # FIXME
+    def resize_with_pad(self, img, img_id):
         '''
-            returns:
-            * resized image with black symmetrical padding
-            * offset(s) to add to absolute coordinates
-            * ratio to multiply with absolute coordinates
+            returns resized image with black symmetrical padding
         '''
 
         w, h = img.shape[0], img.shape[1]
 
         if w < h:
 
-            if (h - w) % 2 == 0:
-                q1 = (h - w) // 2
-                q2 = (h - w) // 2
-            else:
-                q1 = (h - w - 1) // 2
-                q2 = (h - w - 1) // 2 + 1
+            q1 = (h - w) // 2
+            q2 = h - w - q1
 
             padl = np.zeros((q1, h, 3), dtype=np.uint8)
             padr = np.zeros((q2, h, 3), dtype=np.uint8)
         
             img = np.concatenate([padl, img, padr], 0)
-            off = (q1, 0)
-            ratio = self.img_size[0] / h
 
         elif h < w:
 
-            if (w - h) % 2 == 0:
-                q1 = (w - h) // 2
-                q2 = (w - h) // 2
-            else:
-                q1 = (w - h - 1) // 2
-                q2 = (w - h - 1) // 2 + 1
+            q1 = (w - h) // 2
+            q2 = w - h - q1
 
             padl = np.zeros((w, q1, 3), dtype=np.uint8)
             padr = np.zeros((w, q2, 3), dtype=np.uint8)
 
             img = np.concatenate([padl, img, padr], 1)
-            off = (0, q1)
-            ratio = self.img_size[0] / w
 
-        return cv.resize(img, self.img_size), off, ratio
+        assert(img.shape[0] == img.shape[1])
+
+        return cv.resize(img, self.img_size)
 
     def assign_anchors_to_objects(self):
-
         pass
