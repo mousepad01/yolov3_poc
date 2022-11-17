@@ -1,7 +1,8 @@
+import json
+
+import cv2 as cv
 import numpy as np
 import tensorflow as tf
-import cv2 as cv
-import json
 
 from anchor_kmeans import *
 from utils import *
@@ -65,7 +66,7 @@ class DataManager:
                                                 ],
                                         "filename": filename
                                     }
-'''
+        '''
 
         self.anchors = []
         '''
