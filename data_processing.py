@@ -257,9 +257,15 @@ class DataManager:
 
     def assign_anchors_to_objects(self):
 
-        # TODO
-        def _iou(anchor, x, y, w, h):
-            pass
+        def _iou(anchor, w, h):
+            
+            intersect_w = np.minimum(anchor[0], w)
+            intersect_h = np.minimum(anchor[1], h)
+
+            intersection = intersect_w * intersect_h
+            union = w * h + anchor[0] * anchor[1] - intersection
+
+            return intersection / union
         
         for img_id in self.imgs["train"].keys():
 
@@ -278,7 +284,7 @@ class DataManager:
                 for d in range(SCALE_CNT):
                     for a in range(ANCHOR_PERSCALE_CNT):
 
-                        current_iou = _iou(self.anchors[d][a], x, y, w, h)
+                        current_iou = _iou(self.anchors[d][a], w, h)
                         if current_iou > max_iou:
                             
                             max_iou = current_iou
