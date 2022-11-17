@@ -2,6 +2,8 @@ import numpy as np
 import tensorflow as tf
 import cv2 as cv
 
+from utils import *
+
 #   TODO:
 #       define residual layers used
 #       conv - bn - leaky relu blocks
