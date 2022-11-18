@@ -74,7 +74,7 @@ def yolov3_loss_persize(output, bool_mask, target_mask):
     # TODO try sigma(tx), sigma(ty), e^tw, e^th     - ti relative to grid cell count for that scale
 
     # sigma(to)     = Pr(object) (in yolov3) or Pr(object) * IOU(b, object) in yolov2
-    output_confidence = tf.sigmoid(output[..., 4])
+    output_confidence = tf.sigmoid(output[..., 4:5])
 
     # softmax over p0, ... p(C-1)
     output_class_p = tf.keras.activations.softmax(output[..., 5:])
@@ -97,7 +97,7 @@ def yolov3_loss_persize(output, bool_mask, target_mask):
     object_loss = bool_mask * tf.square(1 - output_confidence)
 
     # classification loss
-    target_class = tf.one_hot(target_mask[..., 4], output_class_p.shape[4])
+    target_class = tf.one_hot(tf.cast(target_mask[..., 4], dtype=tf.int32), output_class_p.shape[4])
     classification_loss = bool_mask * tf.keras.losses.categorical_crossentropy(target_class, output_class_p)
 
     # coordinates loss
@@ -105,7 +105,7 @@ def yolov3_loss_persize(output, bool_mask, target_mask):
     target_coord_wh = target_mask[..., 2:4]
     coord_loss = COORD_FACTOR * bool_mask * (tf.square(target_coord_xy - output_xy) + tf.square(target_coord_wh - output_wh))
 
-    total_loss = no_object_loss + object_loss + classification_loss + coord_loss
+    total_loss = tf.math.reduce_sum(no_object_loss) + tf.math.reduce_sum(object_loss) + tf.math.reduce_sum(classification_loss) + tf.math.reduce_sum(coord_loss)
     return total_loss
 
 # TODO

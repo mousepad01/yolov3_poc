@@ -337,5 +337,5 @@ class DataManager:
 
         for d in range(SCALE_CNT):
 
-            self.bool_anchor_masks[d] = tf.convert_to_tensor(self.bool_anchor_masks[d])
-            self.target_anchor_masks[d] = tf.convert_to_tensor(self.target_anchor_masks[d])
+            self.bool_anchor_masks[d] = tf.convert_to_tensor(self.bool_anchor_masks[d], dtype=tf.float32)
+            self.target_anchor_masks[d] = tf.convert_to_tensor(self.target_anchor_masks[d], dtype=tf.float32)
