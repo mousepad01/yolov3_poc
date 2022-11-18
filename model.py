@@ -55,10 +55,17 @@ class ResBlock(tf.keras.layers.Layer):
 
 # TODO
 @tf.function
-def yolov3_loss_persize(output, anchors):
+def yolov3_loss_persize(output, anchors, bool_mask, target_mask):
     '''
-        raw output: B x S x S x A x C + 5
+        raw output: B x S x S x A x (C + 5)
+        (last dimension: tx, ty, tw, th, to, p0, p1, ...p(C-1))
+
         anchors: A x 2
+
+        bool_mask: B x S x S x A x 1
+
+        target_mask: B x S x S x A x 5
+        (last dimension: sigma(tx), sigma(ty), tw, th, i from [0, C - 1])
     '''
     
     B, S, A, C = output.shape[0], output.shape[1], output.shape[3], output.shape[4] - 5
@@ -68,11 +75,44 @@ def yolov3_loss_persize(output, anchors):
 
     anchors = tf.reshape(anchors, (1, 1, 1, A, 2))
 
-    output_xy = tf.concat(tf.sigmoid(output[..., 0:2]), output[..., 2:4], axis=-1)
-    # TODO try the other version where w and h are used as exponent in the loss
-    # output_xy = tf.concat(tf.sigmoid(output[..., 0:2]), tf.exp(output[..., 2:4]), axis=-1)
+    # sigma(tx), sigma(ty), tw, th     - ti relative to grid cell count for that scale
+    output_xywh = tf.concat(tf.sigmoid(output[..., 0:2]), output[..., 2:4], axis=-1) 
+    # TODO try sigma(tx), sigma(ty), e^tw, e^th     - ti relative to grid cell count for that scale
+    # output_xywh = tf.concat(tf.sigmoid(output[..., 0:2]), tf.exp(output[..., 2:4]), axis=-1)
 
-    # TODO
+    # sigma(to)     = Pr(object) (in yolov3) or Pr(object) * IOU(b, object) in yolov2
+    output_confidence = tf.sigmoid(output[..., 4])
+
+    # softmax over p0, ... p(C-1)
+    output_class_p = tf.softmax(output[..., 5:])
+
+    '''
+        4 losses:
+        * object loss
+        * no-object loss
+        * classification loss
+        * coordinate loss
+    '''
+
+    COORD_FACTOR = 5
+    NOOBJ_FACTOR = .5
+
+    # no-object loss
+    no_object_loss = NOOBJ_FACTOR * (1 - bool_mask) * tf.square(0 - output_confidence)
+
+    # object loss
+    object_loss = bool_mask * tf.square(1 - output_confidence)
+
+    # classification loss
+    target_class = tf.one_hot(target_mask[..., 4], C)
+    classification_loss = bool_mask * tf.keras.losses.categorical_crossentropy(target_class, output_class_p)
+
+    # coordinates loss
+    target_coord = target_mask[..., :4]
+    coord_loss = COORD_FACTOR * bool_mask * tf.square(target_coord - output_xywh)
+
+    total_loss = no_object_loss + object_loss + classification_loss + coord_loss
+    return total_loss
 
 # TODO
 @tf.function

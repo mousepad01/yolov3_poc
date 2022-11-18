@@ -334,10 +334,8 @@ class DataManager:
 
                 self.bool_anchor_masks[d].append(bool_mask[d])
                 self.target_anchor_masks[d].append(target_mask[d])
-                
+
         for d in range(SCALE_CNT):
 
             self.bool_anchor_masks[d] = tf.convert_to_tensor(self.bool_anchor_masks[d])
             self.target_anchor_masks[d] = tf.convert_to_tensor(self.target_anchor_masks[d])
-
-            print(self.bool_anchor_masks[d].shape, self.target_anchor_masks[d].shape)
