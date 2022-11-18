@@ -11,10 +11,8 @@ def main():
     #FIXME
     data_manager = DataManager(train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH)
     data_manager.load_info()
-
-    # test k means for anchors
-    anchor_finder = AnchorFinder(data_manager.imgs)
-    anchor_finder.get_anchors()
+    data_manager.determine_anchors()
+    data_manager.assign_anchors_to_objects()
 
     # test loss
     #yolov3_loss(None, None)

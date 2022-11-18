@@ -70,14 +70,17 @@ class DataManager:
 
         self.anchors = []
         '''
-            size D x A x 2 (D = SCALE_COUNT)
+            D x A x 2 (D = SCALE_COUNT)
         '''
 
         self.bool_anchor_masks = [[] for _ in range(SCALE_CNT)]
-        self.target_anchor_masks = [[] for _ in range(SCALE_CNT)]
         '''
             for each scale,
                 B x S[scale] x S[scale] x A x 1     - whether that anchor is responsible for an object or not
+        '''
+        self.target_anchor_masks = [[] for _ in range(SCALE_CNT)]
+        '''
+            for each scale,
                 B x S[scale] x S[scale] x A x 5     - regression targets and the class given by its one_hot index (but NOT one_hot encoded)            
         '''
 
@@ -255,9 +258,17 @@ class DataManager:
             quit()
 
         anchor_finder = AnchorFinder(self.imgs)
-        self.anchors = anchor_finder.get_anchors()
+        self.anchors = tf.cast(tf.convert_to_tensor(anchor_finder.get_anchors()), tf.int32)
 
     def assign_anchors_to_objects(self):
+
+        if self.used_categories == {}:
+            print("info not yet loaded")
+            quit()
+
+        if self.anchors == []:
+            print("anchors not yet determined")
+            quit()
 
         def _iou(anchor, w, h):
             
@@ -271,9 +282,17 @@ class DataManager:
         
         for img_id in self.imgs["train"].keys():
 
-            bool_mask = [tf.zeros((GRID_CELL_CNT[d], GRID_CELL_CNT[d], ANCHOR_PERSCALE_CNT, 1), dtype=tf.int32) for d in range(SCALE_CNT)]
-            target_mask = [tf.zeros((GRID_CELL_CNT[d], GRID_CELL_CNT[d], ANCHOR_PERSCALE_CNT, 5), dtype=tf.int32) for d in range(SCALE_CNT)]
-            
+            # bool_mask = [tf.zeros((GRID_CELL_CNT[d], GRID_CELL_CNT[d], ANCHOR_PERSCALE_CNT, 1), dtype=tf.int32) for d in range(SCALE_CNT)]
+            # target_mask = [tf.zeros((GRID_CELL_CNT[d], GRID_CELL_CNT[d], ANCHOR_PERSCALE_CNT, 5), dtype=tf.int32) for d in range(SCALE_CNT)]
+
+            bool_mask = []
+            target_mask = []
+
+            for d in range(SCALE_CNT):
+
+                bool_mask.append([[[[0] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])])
+                target_mask.append([[[[0, 0, 0, 0, 0] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])])
+
             for bbox_d in self.imgs["train"][img_id]["objs"]:
 
                 categ = np.int32(bbox_d["category"])
@@ -293,32 +312,32 @@ class DataManager:
                             max_iou_idx = a
                             max_iou_scale = d
 
-                if max_iou > 0:
+                x, y = x + w // 2, y + h // 2
+                x, y = x / IMG_SIZE[0], y / IMG_SIZE[0]
+                x, y = x * GRID_CELL_CNT[max_iou_scale], y * GRID_CELL_CNT[max_iou_scale]
 
-                    x, y = x + w // 2, y + h // 2
-                    x, y = x / IMG_SIZE[0], y / IMG_SIZE[0]
-                    x, y = x * GRID_CELL_CNT[max_iou_scale], y * GRID_CELL_CNT[max_iou_scale]
+                cx, cy = np.int32(np.floor(x)), np.int32(np.floor(y))
+                x, y = x - cx, y - cy
 
-                    cx, cy = np.int32(np.floor(x)), np.int32(np.floor(y))
-                    x, y = x - cx, y - cy
+                # get anchor w and h relative to the grid cell count
+                anchor_w = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][0] / IMG_SIZE[0])
+                anchor_h = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][1] / IMG_SIZE[0])
 
-                    # get anchor w and h relative to the grid cell count
-                    anchor_w = np.int32(np.floor(GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][0] / IMG_SIZE[0])))
-                    anchor_h = np.int32(np.floor(GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][1] / IMG_SIZE[0])))
-
-                    bool_mask[max_iou_scale][cx][cy][max_iou_idx] = tf.convert_to_tensor([1])
-                    target_mask[max_iou_scale][cx][cy][max_iou_idx] = tf.convert_to_tensor([tf.sigmoid(x), 
-                                                                                            tf.sigmoid(y),
-                                                                                            tf.math.log(w / anchor_w), 
-                                                                                            tf.math.log(h / anchor_h),
-                                                                                            categ])
+                bool_mask[max_iou_scale][cx][cy][max_iou_idx] = [1]
+                target_mask[max_iou_scale][cx][cy][max_iou_idx] = [tf.sigmoid(x), 
+                                                                    tf.sigmoid(y),
+                                                                    tf.math.log(w / anchor_w), 
+                                                                    tf.math.log(h / anchor_h),
+                                                                    categ]
 
             for d in range(SCALE_CNT):
 
                 self.bool_anchor_masks[d].append(bool_mask[d])
                 self.target_anchor_masks[d].append(target_mask[d])
-
+                
         for d in range(SCALE_CNT):
 
             self.bool_anchor_masks[d] = tf.convert_to_tensor(self.bool_anchor_masks[d])
             self.target_anchor_masks[d] = tf.convert_to_tensor(self.target_anchor_masks[d])
+
+            print(self.bool_anchor_masks[d].shape, self.target_anchor_masks[d].shape)
