@@ -1,3 +1,4 @@
+from copy import deepcopy
 import numpy as np
 import tensorflow as tf
 
@@ -7,7 +8,7 @@ from utils import *
 
 class AnchorFinder:
 
-    PLOT_RESULTS = True
+    PLOT_RESULTS = False
 
     def __init__(self, img_info):
 
@@ -21,7 +22,7 @@ class AnchorFinder:
 
                 self.bbox.append((bbox_d["bbox"][2], bbox_d["bbox"][3]))
 
-        self.k_means_rounds = 32
+        self.ROUNDS = 64
         '''
             arbitrary number of rounds for k means clustering
         '''
@@ -35,15 +36,23 @@ class AnchorFinder:
         
         self.k_means()
 
-        anchors = self.k_means_results.sort(0, key=lambda dim: dim[0] + dim[1])
-        anchors = np.array(anchors).reshape((SCALE_CNT, ANCHOR_PERSCALE_CNT))
+        anchors_ = deepcopy(self.k_means_results)
+        anchors_.sort(key=lambda dim: dim[0] + dim[1])
+        anchors = [[] for _ in range(SCALE_CNT)]
 
-        print(anchors)
+        for d in range(SCALE_CNT):
+            anchors[d] = anchors_[d * ANCHOR_PERSCALE_CNT: (d + 1) * ANCHOR_PERSCALE_CNT]
+
         return anchors
 
     def k_means(self):
         '''
             k-means clustering
+        '''
+
+        repeat_flag = False
+        '''
+            in case one anchor is initialized so far away that it does not converge to any answer
         '''
 
         def _distance(w1, h1, w2, h2):
@@ -60,7 +69,7 @@ class AnchorFinder:
 
         means = np.random.uniform(0, 416, size=(k, 2))
 
-        for _ in range(self.k_means_rounds):
+        for _ in range(self.ROUNDS):
 
             current_means = np.zeros((k, 2))
             current_cluster_count = np.zeros(k)
@@ -83,12 +92,19 @@ class AnchorFinder:
 
                 current_cluster_count[min_center_idx] += 1
 
+            if current_cluster_count[center_idx] == 0:
+                repeat_flag = True
+                break
+
             for center_idx in range(k):
 
                 means[center_idx][0] = current_means[center_idx][0] / current_cluster_count[center_idx]
                 means[center_idx][1] = current_means[center_idx][1] / current_cluster_count[center_idx]
 
-        self.k_means_results = means
+        if repeat_flag is True:
+            self.k_means()
+
+        self.k_means_results = means.tolist()
 
         # plotting - just for testing
         if not AnchorFinder.PLOT_RESULTS:
@@ -118,5 +134,11 @@ class AnchorFinder:
                         cluster_members[center_idx][1],
                         c=color,
                         marker='x')
+
+            plt.scatter([means[center_idx][0]],
+                        [means[center_idx][1]],
+                        c=color,
+                        marker="o",
+                        linewidths=4)
 
         plt.show()

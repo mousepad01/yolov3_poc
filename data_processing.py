@@ -81,9 +81,9 @@ class DataManager:
                 B x S[scale] x S[scale] x A x 5     - regression targets and the class given by its one_hot index (but NOT one_hot encoded)            
         '''
 
-        self.data_load_batch_size = data_load_batch_size
+        self.DATA_LOAD_BATCH_SIZE = data_load_batch_size
 
-        self.img_size = img_size
+        self.IMG_SIZE = img_size
 
     def load_images(self, purpose):
         '''
@@ -118,7 +118,7 @@ class DataManager:
 
                 img = np.concatenate([padl, img, padr], 1)
 
-            return cv.resize(img, self.img_size)
+            return cv.resize(img, self.IMG_SIZE)
         
         if self.used_categories == {}:
             print("info not yet loaded")
@@ -134,7 +134,7 @@ class DataManager:
 
             current_loaded.append(img)
 
-            if len(current_loaded) == self.data_load_batch_size:
+            if len(current_loaded) == self.DATA_LOAD_BATCH_SIZE:
 
                 current_loaded = tf.convert_to_tensor(current_loaded)
                 yield current_loaded
@@ -160,22 +160,24 @@ class DataManager:
                     * ratio to multiply with absolute coordinates
             '''
 
-            off = (0, 0)
-            ratio = 1
-
             if w < h:
 
                 q1 = (h - w) // 2
 
                 off = (q1, 0)
-                ratio = self.img_size[0] / h
+                ratio = self.IMG_SIZE[0] / h
 
             elif h < w:
 
                 q1 = (w - h) // 2
 
                 off = (0, q1)
-                ratio = self.img_size[0] / w
+                ratio = self.IMG_SIZE[0] / w
+
+            else:
+
+                off = (0, 0)
+                ratio = self.IMG_SIZE[0] / w    # or h
 
             return off, ratio
 
@@ -246,7 +248,6 @@ class DataManager:
                     bbox_d["bbox"] = (np.int32(np.floor(ratio * bbox_d["bbox"][0])), np.int32(np.floor(ratio * bbox_d["bbox"][1])), 
                                         np.int32(np.floor(ratio * bbox_d["bbox"][2])), np.int32(np.floor(ratio * bbox_d["bbox"][3])))
 
-    # FIXME
     def determine_anchors(self):
 
         if self.used_categories == {}:
