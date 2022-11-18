@@ -14,6 +14,10 @@ def main():
     data_manager.determine_anchors()
     data_manager.assign_anchors_to_objects()
 
+    print("testing loss")
+    a = tf.random.uniform((16, 13, 13, 3, len(data_manager.used_categories.keys())))
+    yolov3_loss_persize(a, data_manager.bool_anchor_masks[0][:16, ...], data_manager.target_anchor_masks[0][:16, ...])
+
     # test loss
     #yolov3_loss(None, None)
 
