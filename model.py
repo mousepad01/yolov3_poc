@@ -54,7 +54,7 @@ class ResBlock(tf.keras.layers.Layer):
         return y
 
 # TODO
-#@tf.function
+@tf.function
 def yolov3_loss_persize(output, bool_mask, target_mask):
     '''
         raw output: B x S x S x A x (C + 5)
@@ -135,31 +135,31 @@ def get_c_idx(S):
 
     return c_idx
 
-# FIXME ??? for a single size / multiple
 @tf.function
-def make_prediction_persize(output, anchors, THRESHOLD=0.6):
+def make_prediction_perscale(output, anchors, THRESHOLD=0.6):
     '''
-        output: B x S x S x A x C + 5
-        anchors: A x 2
+        output: B x S x S x A x (C + 5)
+        anchors: A x 2  --- RELATIVE TO GRID CELL COUNT FOR CURRENT SCALE !!!!
     '''
 
-    B, S, A, C = output.shape[0], output.shape[1], output.shape[3], output.shape[4] - 5
+    S, A = output.shape[1], output.shape[3]
 
     # TODO remove later
     # assert(A == anchors.shape[0])
 
+    # anchors relative to the grid cell count for the current scale
     anchors = tf.reshape(anchors, (1, 1, 1, A, 2))
 
     c_idx = get_c_idx(S)
-    grid_cells_cnt = tf.convert_to_tensor([S, S]).reshape((1, 1, 1, 1, 2))
+    grid_cells_cnt = tf.reshape(tf.convert_to_tensor([S, S], dtype=tf.float32), (1, 1, 1, 1, 2))
     
     # raw
     output_xy = output[..., 0:2]
     output_wh = output[..., 2:4]
     
     # in terms of how many grid cells
-    output_xy = tf.sigmoid(output_xy) + c_idx
-    output_wh = tf.exp(output_wh) * anchors
+    output_xy = tf.sigmoid(output_xy) + tf.cast(c_idx, tf.float32)
+    output_wh = tf.exp(output_wh) * anchors 
 
     # relative to the whole image
     output_xy = output_xy / grid_cells_cnt
@@ -170,51 +170,89 @@ def make_prediction_persize(output, anchors, THRESHOLD=0.6):
     output_xy_min = output_xy - output_wh_half
     output_xy_max = output_xy + output_wh_half
 
+    print(output_xy_min.shape, output_xy_max.shape)
+
     # class probability
-    output_class_p_if_object = tf.keras.activations.softmax(output[..., 5:])        # single label classification 
-    output_class_p = output_class_p_if_object * tf.sigmoid(output[..., 4])          # confidence gives the probability of being an object
+    output_class_p_if_object = tf.keras.activations.softmax(output[..., 5:])            # single label classification 
+    output_class_p = output_class_p_if_object * tf.sigmoid(output[..., 4:5])            # confidence gives the probability of being an object
 
     output_class = tf.argmax(output_class_p, axis=-1)
     output_class_maxp = tf.reduce_max(output_class_p, axis=-1)
+
+    print(output_class.shape, output_class_maxp.shape, output_class_p.shape)
+    print(output_class_maxp)
     
     output_prediction_mask = output_class_maxp > THRESHOLD
+    print(output_prediction_mask.shape)
+
     output_xy_min = tf.boolean_mask(output_xy_min, output_prediction_mask)
     output_xy_max = tf.boolean_mask(output_xy_max, output_prediction_mask)
     output_class = tf.boolean_mask(output_class, output_prediction_mask)
     output_class_maxp = tf.boolean_mask(output_class_maxp, output_prediction_mask)
 
+    print(output_xy_min.shape, output_xy_max.shape)
+    print(output_class.shape, output_class_p.shape)
+
     return output_xy_min, output_xy_max, output_class, output_class_maxp
 
-# FIXME this is for just one size
-def show_predictions(image, pred_xy_min, pred_xy_max, pred_class, pred_class_p):
+# test function to check the results of target_mask encoding from assign_anchors_to_objects()
+def temp_mask_to_prediction(masks_per_scale, C):
+    '''
+        masks_per_scale: (list of 3=SCALE_CNT) B x S x S x A x 5
+        C: number of classes
+    '''
 
-    img_px_size = tf.convert_to_tensor(image.shape).reshape((1, 1, 1, 1, 2))
+    output = [None for _ in range(SCALE_CNT)]
+    for d in range(SCALE_CNT):
 
-    pred_xy_min = pred_xy_min * img_px_size
-    pred_xy_max = pred_xy_max * img_px_size
-    
-    pred_xy_min = tf.reshape(pred_xy_min, (pred_xy_min.shape[0], -1, 2))
-    pred_xy_max = tf.reshape(pred_xy_max, (pred_xy_max.shape[0], -1, 2))
-    pred_class = tf.reshape(pred_class, (pred_class.shape[0], -1))
-    pred_class_p = tf.reshape(pred_class_p, (pred_class_p.shape[0], -1))
+        B, S, A = masks_per_scale[d][0], masks_per_scale[d][1], masks_per_scale[d][3]
 
-    assert(pred_xy_min.shape == pred_xy_max.shape)
+        output[d] = tf.concat([tf.math.log(masks_per_scale[d][..., 0:2] / (1 - masks_per_scale[d][..., 0:2])), 
+                                masks_per_scale[d][..., 2:4],
+                                tf.fill((B, S, S, A, 1), value=10),
+                                tf.one_hot(masks_per_scale[d][..., 4], C)
+                                ])
+        print(output[d].shape)
 
-    for idx, img in enumerate(image):
+    return output
+
+def show_prediction(image, pred_xy_min, pred_xy_max, pred_class, pred_class_p):
+    '''
+        pred_xy_min, pred_xy_max: (list of SCALE_CNT=3) 1 x S x S x A x 2
+        pred_class: (list of SCALE_CNT=3) 1 x S x S x A x 1
+        pred_class_p: (list of SCALE_CNT=3) 1 x S x S x A x 1
+        pred_xy are given relative to the whole image size
+    '''
+
+    print(pred_xy_min[0].shape, pred_xy_max[0].shape, pred_class[0].shape, pred_class_p[0].shape)
+
+    img_px_size = tf.convert_to_tensor(image.shape[:2], dtype=tf.float32)
+    img_px_size = tf.reshape(img_px_size, (1, 1, 1, 1, 2))
+
+    for d in range(SCALE_CNT):
+
+        pred_xy_min[d] = pred_xy_min[d] * img_px_size
+        pred_xy_max[d] = pred_xy_max[d] * img_px_size
         
-        for box_idx in range(pred_xy_min[idx].shape[1]):
+        pred_xy_min[d] = tf.reshape(pred_xy_min[d], (pred_xy_min[d].shape[0], -1, 2))
+        pred_xy_max[d] = tf.reshape(pred_xy_max[d], (pred_xy_max[d].shape[0], -1, 2))
+        pred_class[d] = tf.reshape(pred_class[d], (pred_class[d].shape[0], -1))
+        pred_class_p[d] = tf.reshape(pred_class_p[d], (pred_class_p[d].shape[0], -1))
+
+        assert(pred_xy_min[d].shape == pred_xy_max[d].shape)
+
+    for d in range(SCALE_CNT):
+    
+        for box_idx in range(pred_xy_min[d].shape[1]):
             
-            x_min, y_min = pred_xy_min[idx][box_idx][0], pred_xy_min[idx][box_idx][1]
-            x_max, y_max = pred_xy_max[idx][box_idx][0], pred_xy_max[idx][box_idx][1]
+            x_min, y_min = pred_xy_min[d][box_idx][0], pred_xy_min[d][box_idx][1]
+            x_max, y_max = pred_xy_max[d][box_idx][0], pred_xy_max[d][box_idx][1]
 
-            predicted_class = pred_class[idx][box_idx]
-            predicted_class_p = pred_class_p[idx][box_idx]
+            predicted_class = pred_class[d][box_idx]
+            predicted_class_p = pred_class_p[d][box_idx]
 
-            cv.rectangle(img, (y_min, x_min), (y_max, x_max), color=(0, 0, 255), thickness=2)
-            cv.putText(img, text=f"{predicted_class}: {predicted_class_p}%", org=(y_min - 10, x_min), font_face=cv.FONT_HERSHEY_SIMPLEX, color=(0, 0, 255), thickness=2)
+            cv.rectangle(image, (y_min, x_min), (y_max, x_max), color=(0, 0, 255), thickness=2)
+            cv.putText(image, text=f"{predicted_class}: {predicted_class_p}%", org=(y_min - 10, x_min), font_face=cv.FONT_HERSHEY_SIMPLEX, color=(0, 0, 255), thickness=2)
 
-        cv.imshow(img)
-        if len(image) > 1:
-            cv.waitKey(1000)
-        else:
-            cv.waitKey(0)
+    cv.imshow("prediction", image)
+    cv.waitKey(0)

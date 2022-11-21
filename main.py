@@ -14,13 +14,45 @@ def main():
     data_manager.determine_anchors()
     data_manager.assign_anchors_to_objects()
 
+    return
+
     print("DO NOT FORGET TO ELIMINATE THRESHOLD AT ASSIGN ANCHORS TO OBJECTS")
 
-    a = tf.random.uniform((16, 13, 13, 3, len(data_manager.used_categories.keys()) + 5))
-    yolov3_loss_persize(a, data_manager.bool_anchor_masks[0][:16, ...], data_manager.target_anchor_masks[0][:16, ...])
+    # test loss function for generic bugs
+    #a = tf.random.uniform((16, 13, 13, 3, len(data_manager.used_categories.keys()) + 5))
+    #yolov3_loss_persize(a, data_manager.bool_anchor_masks[0][:16, ...], data_manager.target_anchor_masks[0][:16, ...])
 
-    # test loss
-    #yolov3_loss(None, None)
+    # test target_mask encoding
+    # output_from_mask = temp_mask_to_prediction(data_manager.target_anchor_masks, len(data_manager.used_categories.keys()))
+
+    output_from_mask = [None for _ in range(SCALE_CNT)]
+    for d in range(SCALE_CNT):
+
+        B, S, A = data_manager.target_anchor_masks[d].shape[0], data_manager.target_anchor_masks[d].shape[1], data_manager.target_anchor_masks[d].shape[3]
+
+        output_from_mask[d] = tf.concat([tf.math.log(data_manager.target_anchor_masks[d][..., 0:2] / (1 - data_manager.target_anchor_masks[d][..., 0:2])), 
+                                        data_manager.target_anchor_masks[d][..., 2:4],
+                                        tf.cast(tf.fill((B, S, S, A, 1), value=10.0), dtype=tf.float32),
+                                        tf.cast(tf.one_hot(tf.cast(data_manager.target_anchor_masks[d][..., 4], tf.int32), len(data_manager.used_categories.keys())), dtype=tf.float32),
+                                        ], axis=-1)
+
+    anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
+
+    cnt_ = 0
+    for img_id in data_manager.imgs["train"].keys():
+
+        cnt_ += 1
+        if cnt_ >= 20:
+            break
+
+        img = cv.imread(data_manager.data_path["train"] + data_manager.imgs["train"][img_id]["filename"])
+        img = data_manager.resize_with_pad(img)
+
+        output_perimg = [make_prediction_perscale(output_from_mask[d][cnt_: cnt_ + 1], anchors_relative[d], 0.6) for d in range(SCALE_CNT)]
+        show_prediction(img, [output_perimg[d][0] for d in range(SCALE_CNT)],
+                                [output_perimg[d][1] for d in range(SCALE_CNT)],
+                                [output_perimg[d][2] for d in range(SCALE_CNT)],
+                                [output_perimg[d][3] for d in range(SCALE_CNT)])
 
 
 if __name__ == "__main__":

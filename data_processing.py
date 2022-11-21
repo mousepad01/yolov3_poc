@@ -88,40 +88,40 @@ class DataManager:
 
         self.IMG_SIZE = img_size
 
+    def resize_with_pad(self, img):
+        '''
+            returns resized image with black symmetrical padding
+        '''
+
+        w, h = img.shape[0], img.shape[1]
+
+        if w < h:
+
+            q1 = (h - w) // 2
+            q2 = h - w - q1
+
+            padl = np.zeros((q1, h, 3), dtype=np.uint8)
+            padr = np.zeros((q2, h, 3), dtype=np.uint8)
+        
+            img = np.concatenate([padl, img, padr], 0)
+
+        elif h < w:
+
+            q1 = (w - h) // 2
+            q2 = w - h - q1
+
+            padl = np.zeros((w, q1, 3), dtype=np.uint8)
+            padr = np.zeros((w, q2, 3), dtype=np.uint8)
+
+            img = np.concatenate([padl, img, padr], 1)
+
+        return cv.resize(img, self.IMG_SIZE)
+
     def load_images(self, purpose):
         '''
             generator, for lazy loading
             purpose: "train" | "validation"
         '''
-
-        def _resize_with_pad(img):
-            '''
-                returns resized image with black symmetrical padding
-            '''
-
-            w, h = img.shape[0], img.shape[1]
-
-            if w < h:
-
-                q1 = (h - w) // 2
-                q2 = h - w - q1
-
-                padl = np.zeros((q1, h, 3), dtype=np.uint8)
-                padr = np.zeros((q2, h, 3), dtype=np.uint8)
-            
-                img = np.concatenate([padl, img, padr], 0)
-
-            elif h < w:
-
-                q1 = (w - h) // 2
-                q2 = w - h - q1
-
-                padl = np.zeros((w, q1, 3), dtype=np.uint8)
-                padr = np.zeros((w, q2, 3), dtype=np.uint8)
-
-                img = np.concatenate([padl, img, padr], 1)
-
-            return cv.resize(img, self.IMG_SIZE)
         
         if self.used_categories == {}:
             print("info not yet loaded")
@@ -130,10 +130,8 @@ class DataManager:
         current_loaded = []
         for img_id in self.imgs[purpose].keys():
 
-            TESTIDS.append(img_id)
-
             img = cv.imread(self.data_path[purpose] + self.imgs[purpose][img_id]["filename"])
-            img = _resize_with_pad(img)
+            img = self.resize_with_pad(img)
 
             current_loaded.append(img)
 
@@ -318,9 +316,11 @@ class DataManager:
                             max_iou_idx = a
                             max_iou_scale = d
 
+                print(max_iou, max_iou_idx, max_iou_scale)
+
                 x, y = x + w // 2, y + h // 2
-                x, y = x / IMG_SIZE[0], y / IMG_SIZE[0]
-                x, y = x * GRID_CELL_CNT[max_iou_scale], y * GRID_CELL_CNT[max_iou_scale]
+                x, y, w, h = x / IMG_SIZE[0], y / IMG_SIZE[0], w / IMG_SIZE[0], h / IMG_SIZE[0]
+                x, y, w, h = x * GRID_CELL_CNT[max_iou_scale], y * GRID_CELL_CNT[max_iou_scale], w * GRID_CELL_CNT[max_iou_scale], h * GRID_CELL_CNT[max_iou_scale]
 
                 cx, cy = np.int32(np.floor(x)), np.int32(np.floor(y))
                 x, y = x - cx, y - cy
