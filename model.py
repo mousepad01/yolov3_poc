@@ -129,14 +129,15 @@ def get_c_idx(S):
     w_idx = tf.transpose(w_idx)
     w_idx = tf.reshape(w_idx, (S * S,))
 
-    c_idx = tf.stack([h_idx, w_idx])
+    c_idx = tf.stack([w_idx, h_idx])
     c_idx = tf.transpose(c_idx)
     c_idx = tf.reshape(c_idx, (1, S, S, 1, 2))
 
     return c_idx
 
-@tf.function
-def make_prediction_perscale(output, anchors, THRESHOLD=0.6):
+# FIXME eliminate last parameter which decides whether to use sigmoid or not
+#@tf.function
+def make_prediction_perscale(output, anchors, THRESHOLD=0.6, use_sigmoid=False):
     '''
         output: B x S x S x A x (C + 5)
         anchors: A x 2  --- RELATIVE TO GRID CELL COUNT FOR CURRENT SCALE !!!!
@@ -156,9 +157,12 @@ def make_prediction_perscale(output, anchors, THRESHOLD=0.6):
     # raw
     output_xy = output[..., 0:2]
     output_wh = output[..., 2:4]
-    
+
     # in terms of how many grid cells
-    output_xy = tf.sigmoid(output_xy) + tf.cast(c_idx, tf.float32)
+    if use_sigmoid is True:
+        output_xy = tf.sigmoid(output_xy) + tf.cast(c_idx, tf.float32)
+    else:
+        output_xy = output_xy + tf.cast(c_idx, tf.float32)
     output_wh = tf.exp(output_wh) * anchors 
 
     # relative to the whole image
@@ -194,27 +198,6 @@ def make_prediction_perscale(output, anchors, THRESHOLD=0.6):
     print(output_class.shape, output_class_p.shape)
 
     return output_xy_min, output_xy_max, output_class, output_class_maxp
-
-# test function to check the results of target_mask encoding from assign_anchors_to_objects()
-def temp_mask_to_prediction(masks_per_scale, C):
-    '''
-        masks_per_scale: (list of 3=SCALE_CNT) B x S x S x A x 5
-        C: number of classes
-    '''
-
-    output = [None for _ in range(SCALE_CNT)]
-    for d in range(SCALE_CNT):
-
-        B, S, A = masks_per_scale[d][0], masks_per_scale[d][1], masks_per_scale[d][3]
-
-        output[d] = tf.concat([tf.math.log(masks_per_scale[d][..., 0:2] / (1 - masks_per_scale[d][..., 0:2])), 
-                                masks_per_scale[d][..., 2:4],
-                                tf.fill((B, S, S, A, 1), value=10),
-                                tf.one_hot(masks_per_scale[d][..., 4], C)
-                                ])
-        print(output[d].shape)
-
-    return output
 
 def show_prediction(image, pred_xy_min, pred_xy_max, pred_class, pred_class_p):
     '''

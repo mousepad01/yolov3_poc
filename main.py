@@ -14,8 +14,6 @@ def main():
     data_manager.determine_anchors()
     data_manager.assign_anchors_to_objects()
 
-    return
-
     print("DO NOT FORGET TO ELIMINATE THRESHOLD AT ASSIGN ANCHORS TO OBJECTS")
 
     # test loss function for generic bugs
@@ -30,11 +28,12 @@ def main():
 
         B, S, A = data_manager.target_anchor_masks[d].shape[0], data_manager.target_anchor_masks[d].shape[1], data_manager.target_anchor_masks[d].shape[3]
 
-        output_from_mask[d] = tf.concat([tf.math.log(data_manager.target_anchor_masks[d][..., 0:2] / (1 - data_manager.target_anchor_masks[d][..., 0:2])), 
-                                        data_manager.target_anchor_masks[d][..., 2:4],
-                                        tf.cast(tf.fill((B, S, S, A, 1), value=10.0), dtype=tf.float32),
-                                        tf.cast(tf.one_hot(tf.cast(data_manager.target_anchor_masks[d][..., 4], tf.int32), len(data_manager.used_categories.keys())), dtype=tf.float32),
-                                        ], axis=-1)
+        sigmoid_tx_ty = data_manager.target_anchor_masks[d][..., 0:2]
+        tw_th = data_manager.target_anchor_masks[d][..., 2:4]
+        to = tf.cast(tf.fill((B, S, S, A, 1), value=10.0), dtype=tf.float32)
+        probabilities = tf.cast(tf.one_hot(tf.cast(data_manager.target_anchor_masks[d][..., 4], tf.int32), len(data_manager.used_categories.keys())), dtype=tf.float32)
+
+        output_from_mask[d] = tf.concat([sigmoid_tx_ty, tw_th, to, probabilities], axis=-1)
 
     anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
 
@@ -48,7 +47,7 @@ def main():
         img = cv.imread(data_manager.data_path["train"] + data_manager.imgs["train"][img_id]["filename"])
         img = data_manager.resize_with_pad(img)
 
-        output_perimg = [make_prediction_perscale(output_from_mask[d][cnt_: cnt_ + 1], anchors_relative[d], 0.6) for d in range(SCALE_CNT)]
+        output_perimg = [make_prediction_perscale(output_from_mask[d][cnt_: cnt_ + 1], anchors_relative[d], 0.6, False) for d in range(SCALE_CNT)]
         show_prediction(img, [output_perimg[d][0] for d in range(SCALE_CNT)],
                                 [output_perimg[d][1] for d in range(SCALE_CNT)],
                                 [output_perimg[d][2] for d in range(SCALE_CNT)],

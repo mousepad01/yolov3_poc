@@ -316,22 +316,20 @@ class DataManager:
                             max_iou_idx = a
                             max_iou_scale = d
 
-                print(max_iou, max_iou_idx, max_iou_scale)
-
                 x, y = x + w // 2, y + h // 2
                 x, y, w, h = x / IMG_SIZE[0], y / IMG_SIZE[0], w / IMG_SIZE[0], h / IMG_SIZE[0]
                 x, y, w, h = x * GRID_CELL_CNT[max_iou_scale], y * GRID_CELL_CNT[max_iou_scale], w * GRID_CELL_CNT[max_iou_scale], h * GRID_CELL_CNT[max_iou_scale]
 
                 cx, cy = np.int32(np.floor(x)), np.int32(np.floor(y))
-                x, y = x - cx, y - cy
+                x, y = x - cx, y - cy   # x - cx, y - cy == sigmoid(tx) - cx, sigmoid(ty) - cy <=> x = sigmoid(tx), y = sigmoid(ty)
 
                 # get anchor w and h relative to the grid cell count
                 anchor_w = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][0] / IMG_SIZE[0])
                 anchor_h = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][1] / IMG_SIZE[0])
 
                 bool_mask[max_iou_scale][cx][cy][max_iou_idx] = [1]
-                target_mask[max_iou_scale][cx][cy][max_iou_idx] = [tf.sigmoid(x), 
-                                                                    tf.sigmoid(y),
+                target_mask[max_iou_scale][cx][cy][max_iou_idx] = [x, 
+                                                                    y,
                                                                     tf.math.log(w / anchor_w), 
                                                                     tf.math.log(h / anchor_h),
                                                                     categ]
