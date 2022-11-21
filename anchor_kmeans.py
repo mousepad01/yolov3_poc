@@ -92,19 +92,22 @@ class AnchorFinder:
 
                 current_cluster_count[min_center_idx] += 1
 
-            if current_cluster_count[center_idx] == 0:
-                repeat_flag = True
-                break
-
             for center_idx in range(k):
 
-                means[center_idx][0] = current_means[center_idx][0] / current_cluster_count[center_idx]
-                means[center_idx][1] = current_means[center_idx][1] / current_cluster_count[center_idx]
+                if np.isclose(current_cluster_count[center_idx], 0):
+                    repeat_flag = True
+                    break
+                
+                means[center_idx][0] = current_means[center_idx, 0] / current_cluster_count[center_idx]
+                means[center_idx][1] = current_means[center_idx, 1] / current_cluster_count[center_idx]
+
+            if repeat_flag is True:
+                break
+
+        self.k_means_results = means.tolist()
 
         if repeat_flag is True:
             self.k_means()
-
-        self.k_means_results = means.tolist()
 
         # plotting - just for testing
         if not AnchorFinder.PLOT_RESULTS:

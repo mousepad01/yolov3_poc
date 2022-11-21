@@ -54,7 +54,7 @@ class ResBlock(tf.keras.layers.Layer):
         return y
 
 # TODO
-@tf.function
+#@tf.function
 def yolov3_loss_persize(output, bool_mask, target_mask):
     '''
         raw output: B x S x S x A x (C + 5)
@@ -87,7 +87,7 @@ def yolov3_loss_persize(output, bool_mask, target_mask):
         * coordinate loss
     '''
 
-    COORD_FACTOR = tf.constant(5)
+    COORD_FACTOR = tf.constant(5.0)
     NOOBJ_FACTOR = tf.constant(.5)
 
     # no-object loss
@@ -98,12 +98,15 @@ def yolov3_loss_persize(output, bool_mask, target_mask):
 
     # classification loss
     target_class = tf.one_hot(tf.cast(target_mask[..., 4], dtype=tf.int32), output_class_p.shape[4])
-    classification_loss = bool_mask * tf.keras.losses.categorical_crossentropy(target_class, output_class_p)
+    classification_loss = bool_mask * tf.expand_dims(tf.keras.losses.categorical_crossentropy(target_class, output_class_p), axis=-1)
 
     # coordinates loss
     target_coord_xy = target_mask[..., 0:2]
     target_coord_wh = target_mask[..., 2:4]
-    coord_loss = COORD_FACTOR * bool_mask * (tf.square(target_coord_xy - output_xy) + tf.square(target_coord_wh - output_wh))
+    #print(target_coord_xy, target_coord_wh)
+    coord_loss = COORD_FACTOR
+    coord_loss *= bool_mask 
+    coord_loss *= (tf.square(target_coord_xy - output_xy) + tf.square(target_coord_wh - output_wh))
 
     total_loss = tf.math.reduce_sum(no_object_loss) + tf.math.reduce_sum(object_loss) + tf.math.reduce_sum(classification_loss) + tf.math.reduce_sum(coord_loss)
     return total_loss
