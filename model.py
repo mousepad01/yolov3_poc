@@ -103,10 +103,7 @@ def yolov3_loss_persize(output, bool_mask, target_mask):
     # coordinates loss
     target_coord_xy = target_mask[..., 0:2]
     target_coord_wh = target_mask[..., 2:4]
-    #print(target_coord_xy, target_coord_wh)
-    coord_loss = COORD_FACTOR
-    coord_loss *= bool_mask 
-    coord_loss *= (tf.square(target_coord_xy - output_xy) + tf.square(target_coord_wh - output_wh))
+    coord_loss = COORD_FACTOR * bool_mask * (tf.square(target_coord_xy - output_xy) + tf.square(target_coord_wh - output_wh))
 
     total_loss = tf.math.reduce_sum(no_object_loss) + tf.math.reduce_sum(object_loss) + tf.math.reduce_sum(classification_loss) + tf.math.reduce_sum(coord_loss)
     return total_loss

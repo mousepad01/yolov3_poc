@@ -16,7 +16,6 @@ def main():
 
     print("DO NOT FORGET TO ELIMINATE THRESHOLD AT ASSIGN ANCHORS TO OBJECTS")
 
-    print(f"testing loss with {len(data_manager.used_categories.keys())} classes")
     a = tf.random.uniform((16, 13, 13, 3, len(data_manager.used_categories.keys()) + 5))
     yolov3_loss_persize(a, data_manager.bool_anchor_masks[0][:16, ...], data_manager.target_anchor_masks[0][:16, ...])
 
