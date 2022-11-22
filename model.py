@@ -136,18 +136,14 @@ def get_c_idx(S):
 
     return c_idx
 
-# FIXME eliminate last parameter which decides whether to use sigmoid or not
-#@tf.function
-def make_prediction_perscale(output, anchors, THRESHOLD=0.6, use_sigmoid=False):
+@tf.function
+def make_prediction_perscale(output, anchors, THRESHOLD=0.6):
     '''
         output: B x S x S x A x (C + 5)
         anchors: A x 2  --- RELATIVE TO GRID CELL COUNT FOR CURRENT SCALE !!!!
     '''
 
     S, A = output.shape[1], output.shape[3]
-
-    # TODO remove later
-    # assert(A == anchors.shape[0])
 
     # anchors relative to the grid cell count for the current scale
     anchors = tf.reshape(anchors, (1, 1, 1, A, 2))
@@ -160,10 +156,7 @@ def make_prediction_perscale(output, anchors, THRESHOLD=0.6, use_sigmoid=False):
     output_wh = output[..., 2:4]
 
     # in terms of how many grid cells
-    if use_sigmoid is True:
-        output_xy = tf.sigmoid(output_xy) + tf.cast(c_idx, tf.float32)
-    else:
-        output_xy = output_xy + tf.cast(c_idx, tf.float32)
+    output_xy = tf.sigmoid(output_xy) + tf.cast(c_idx, tf.float32)
     output_wh = tf.exp(output_wh) * anchors 
 
     # relative to the whole image
@@ -183,13 +176,6 @@ def make_prediction_perscale(output, anchors, THRESHOLD=0.6, use_sigmoid=False):
     output_class_maxp = tf.reduce_max(output_class_p, axis=-1)
     
     output_prediction_mask = output_class_maxp > THRESHOLD
-    '''print(output_prediction_mask.shape)
-    for i in range(S):
-        for j in range(S):
-            for a in range(ANCHOR_PERSCALE_CNT):
-                if output_prediction_mask[0][i][j][a] == tf.convert_to_tensor(True):
-                    print(i, j, a, output_prediction_mask[0][i][j][a])
-'''
     output_xy_min = tf.boolean_mask(output_xy_min, output_prediction_mask)
     output_xy_max = tf.boolean_mask(output_xy_max, output_prediction_mask)
     output_class = tf.boolean_mask(output_class, output_prediction_mask)
