@@ -14,6 +14,12 @@ IMG_SIZE = (416, 416)
     fixed image input size
 '''
 
+CLASSIFICATION_SIZE = (256, 256)
+'''
+    (UNUSED)
+    classification pre-training of backbone
+'''
+
 GRID_CELL_CNT = [13, 26, 52]
 '''
     for each scale, the value of S
