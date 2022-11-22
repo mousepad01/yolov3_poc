@@ -1,3 +1,4 @@
+from math import floor
 import numpy as np
 import tensorflow as tf
 import cv2 as cv
@@ -174,40 +175,37 @@ def make_prediction_perscale(output, anchors, THRESHOLD=0.6, use_sigmoid=False):
     output_xy_min = output_xy - output_wh_half
     output_xy_max = output_xy + output_wh_half
 
-    print(output_xy_min.shape, output_xy_max.shape)
-
     # class probability
     output_class_p_if_object = tf.keras.activations.softmax(output[..., 5:])            # single label classification 
     output_class_p = output_class_p_if_object * tf.sigmoid(output[..., 4:5])            # confidence gives the probability of being an object
 
     output_class = tf.argmax(output_class_p, axis=-1)
     output_class_maxp = tf.reduce_max(output_class_p, axis=-1)
-
-    print(output_class.shape, output_class_maxp.shape, output_class_p.shape)
-    print(output_class_maxp)
     
     output_prediction_mask = output_class_maxp > THRESHOLD
-    print(output_prediction_mask.shape)
-
+    '''print(output_prediction_mask.shape)
+    for i in range(S):
+        for j in range(S):
+            for a in range(ANCHOR_PERSCALE_CNT):
+                if output_prediction_mask[0][i][j][a] == tf.convert_to_tensor(True):
+                    print(i, j, a, output_prediction_mask[0][i][j][a])
+'''
     output_xy_min = tf.boolean_mask(output_xy_min, output_prediction_mask)
     output_xy_max = tf.boolean_mask(output_xy_max, output_prediction_mask)
     output_class = tf.boolean_mask(output_class, output_prediction_mask)
     output_class_maxp = tf.boolean_mask(output_class_maxp, output_prediction_mask)
 
-    print(output_xy_min.shape, output_xy_max.shape)
-    print(output_class.shape, output_class_p.shape)
-
     return output_xy_min, output_xy_max, output_class, output_class_maxp
 
-def show_prediction(image, pred_xy_min, pred_xy_max, pred_class, pred_class_p):
+def show_prediction(image, pred_xy_min, pred_xy_max, pred_class, pred_class_p, categ_to_name=None, ground_truth_info=None):
     '''
         pred_xy_min, pred_xy_max: (list of SCALE_CNT=3) 1 x S x S x A x 2
         pred_class: (list of SCALE_CNT=3) 1 x S x S x A x 1
         pred_class_p: (list of SCALE_CNT=3) 1 x S x S x A x 1
         pred_xy are given relative to the whole image size
+        (optional) categ_to_name: one hot encoding category idx -> category name
+        (optional) ground truth info: [{"category": one hot idx, "bbox": (x, y, w, h) absolute}, ...]
     '''
-
-    print(pred_xy_min[0].shape, pred_xy_max[0].shape, pred_class[0].shape, pred_class_p[0].shape)
 
     img_px_size = tf.convert_to_tensor(image.shape[:2], dtype=tf.float32)
     img_px_size = tf.reshape(img_px_size, (1, 1, 1, 1, 2))
@@ -217,25 +215,55 @@ def show_prediction(image, pred_xy_min, pred_xy_max, pred_class, pred_class_p):
         pred_xy_min[d] = pred_xy_min[d] * img_px_size
         pred_xy_max[d] = pred_xy_max[d] * img_px_size
         
-        pred_xy_min[d] = tf.reshape(pred_xy_min[d], (pred_xy_min[d].shape[0], -1, 2))
-        pred_xy_max[d] = tf.reshape(pred_xy_max[d], (pred_xy_max[d].shape[0], -1, 2))
-        pred_class[d] = tf.reshape(pred_class[d], (pred_class[d].shape[0], -1))
-        pred_class_p[d] = tf.reshape(pred_class_p[d], (pred_class_p[d].shape[0], -1))
+        pred_xy_min[d] = tf.reshape(pred_xy_min[d], (-1, 2))
+        pred_xy_max[d] = tf.reshape(pred_xy_max[d], (-1, 2))
+        pred_class[d] = tf.reshape(pred_class[d], (-1))
+        pred_class_p[d] = tf.reshape(pred_class_p[d], (-1))
 
-        assert(pred_xy_min[d].shape == pred_xy_max[d].shape)
+    SHOW_RESIZE_FACTOR = 2.3
+    image =  cv.resize(image, (int(IMG_SIZE[0] * SHOW_RESIZE_FACTOR), int(IMG_SIZE[0] * SHOW_RESIZE_FACTOR)))
+
+    # if there is ground truth, first show it
+    if ground_truth_info is not None:
+
+        image_ = np.copy(image)
+
+        for bbox_d in ground_truth_info:
+
+            predicted_class = int(bbox_d["category"])
+
+            if categ_to_name is not None:
+                class_output = categ_to_name[predicted_class]
+            else:
+                class_output = predicted_class
+
+            x, y, w, h = bbox_d["bbox"]
+            x_min, y_min = int(x * SHOW_RESIZE_FACTOR), int(y * SHOW_RESIZE_FACTOR)
+            x_max, y_max = int((x + w) * SHOW_RESIZE_FACTOR), int((y + h) * SHOW_RESIZE_FACTOR)
+
+            cv.rectangle(image_, (y_min, x_min), (y_max, x_max), color=CLASS_TO_COLOR[predicted_class], thickness=2)
+            cv.putText(image_, text=f"{class_output}", org=(y_min, x_min - 10), fontFace=cv.FONT_HERSHEY_SIMPLEX, fontScale=0.4, color=CLASS_TO_COLOR[predicted_class], thickness=1)
+
+        cv.imshow("ground truth", image_)
+        cv.waitKey(0)
 
     for d in range(SCALE_CNT):
     
-        for box_idx in range(pred_xy_min[d].shape[1]):
+        for box_idx in range(pred_xy_min[d].shape[0]):
             
-            x_min, y_min = pred_xy_min[d][box_idx][0], pred_xy_min[d][box_idx][1]
-            x_max, y_max = pred_xy_max[d][box_idx][0], pred_xy_max[d][box_idx][1]
+            x_min, y_min = int(pred_xy_min[d][box_idx][0] * SHOW_RESIZE_FACTOR), int(pred_xy_min[d][box_idx][1] * SHOW_RESIZE_FACTOR)
+            x_max, y_max = int(pred_xy_max[d][box_idx][0] * SHOW_RESIZE_FACTOR), int(pred_xy_max[d][box_idx][1] * SHOW_RESIZE_FACTOR)
 
-            predicted_class = pred_class[d][box_idx]
+            predicted_class = int(pred_class[d][box_idx])
             predicted_class_p = pred_class_p[d][box_idx]
 
-            cv.rectangle(image, (y_min, x_min), (y_max, x_max), color=(0, 0, 255), thickness=2)
-            cv.putText(image, text=f"{predicted_class}: {predicted_class_p}%", org=(y_min - 10, x_min), font_face=cv.FONT_HERSHEY_SIMPLEX, color=(0, 0, 255), thickness=2)
+            if categ_to_name is not None:
+                class_output = categ_to_name[predicted_class]
+            else:
+                class_output = predicted_class
+
+            cv.rectangle(image, (y_min, x_min), (y_max, x_max), color=CLASS_TO_COLOR[predicted_class], thickness=2)
+            cv.putText(image, text=f"{class_output}: {floor(predicted_class_p * 100) / 100}%", org=(y_min, x_min - 10), fontFace=cv.FONT_HERSHEY_SIMPLEX, fontScale=0.4, color=CLASS_TO_COLOR[predicted_class], thickness=1)
 
     cv.imshow("prediction", image)
     cv.waitKey(0)

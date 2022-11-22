@@ -1,3 +1,4 @@
+import cv2 as cv
 
 '''
     Various constants needed in whatever places
@@ -26,4 +27,11 @@ SCALE_CNT = 3
 ANCHOR_PERSCALE_CNT = 3
 '''
     numbers of anchor types per scale (A dimension)
+'''
+
+CLASS_TO_COLOR = [(255, 0, 0), (0, 0, 255), (0, 255, 0), (0, 0, 0), (255, 0, 255), (255, 255, 0), (0, 255, 255), (165, 42, 42), (255, 140, 0), (255, 255, 255)]
+for idx, rgb in enumerate(CLASS_TO_COLOR):
+    CLASS_TO_COLOR[idx] = (rgb[2], rgb[1], rgb[0])
+'''
+    class one hot encoding idx to color
 '''

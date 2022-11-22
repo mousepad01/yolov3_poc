@@ -47,6 +47,11 @@ class DataManager:
                                                         }
         '''
 
+        self.onehot_to_name = {}
+        '''
+            self.onehot_to_name[one hot idx] = name
+        '''
+
         self.category_onehot_to_id = []
         '''
             category_onehot_to_id[one hot index] = category ID from dataset
@@ -201,6 +206,7 @@ class DataManager:
                                                             "onehot": len(self.category_onehot_to_id)
                                                         }
 
+                    self.onehot_to_name[len(self.category_onehot_to_id)] = categ["name"]
                     self.category_onehot_to_id.append(categ["id"])
 
             for anno in info["annotations"]:
