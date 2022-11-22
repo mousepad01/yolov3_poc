@@ -16,7 +16,7 @@ def tests():
     data_manager.determine_anchors()
     data_manager.assign_anchors_to_objects()
 
-    print("DO NOT FORGET TO ELIMINATE THRESHOLD AT ASSIGN ANCHORS TO OBJECTS")
+    # print("DO NOT FORGET TO ELIMINATE THRESHOLD AT ASSIGN ANCHORS TO OBJECTS")
 
     # test loss function for generic bugs
     #a = tf.random.uniform((16, 13, 13, 3, len(data_manager.used_categories.keys()) + 5))
@@ -29,14 +29,12 @@ def tests():
     for d in range(SCALE_CNT):
 
         B, S, A = data_manager.target_anchor_masks[d].shape[0], data_manager.target_anchor_masks[d].shape[1], data_manager.target_anchor_masks[d].shape[3]
-
         sigmoid_tx_ty = data_manager.target_anchor_masks[d][..., 0:2]
         tx_ty = tf.math.log(sigmoid_tx_ty / (1 - sigmoid_tx_ty)) * data_manager.bool_anchor_masks[d]
         tw_th = data_manager.target_anchor_masks[d][..., 2:4] * data_manager.bool_anchor_masks[d]
         to = tf.cast(tf.fill((B, S, S, A, 1), value=10.0), dtype=tf.float32) * data_manager.bool_anchor_masks[d] + \
                 tf.cast(tf.fill((B, S, S, A, 1), value=-10.0), dtype=tf.float32) * (1 - data_manager.bool_anchor_masks[d])
         probabilities = tf.cast(tf.one_hot(tf.cast(data_manager.target_anchor_masks[d][..., 4], tf.int32), len(data_manager.used_categories.keys())) * 10, dtype=tf.float32)
-
         output_from_mask[d] = tf.concat([tx_ty, tw_th, to, probabilities], axis=-1) 
 
     anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
