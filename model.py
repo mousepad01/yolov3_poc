@@ -11,10 +11,10 @@ class ConvLayer(tf.keras.layers.Layer):
 
     LEAKY_RELU_RATE = 0.1
 
-    def __init__(self, filters: int, size: int, stride=1, padding="same"):
+    def __init__(self, filters: int, size: int, stride=1):
         super().__init__()
 
-        self.conv = tf.keras.layers.Conv2D(filters=filters, kernel_size=size, strides=stride, padding=padding)
+        self.conv = tf.keras.layers.Conv2D(filters=filters, kernel_size=size, strides=stride, padding="same")
         self.bnorm = tf.keras.layers.BatchNormalization()
         self.leaky_relu = tf.keras.layers.LeakyReLU(alpha=ConvLayer.LEAKY_RELU_RATE)
 
@@ -31,8 +31,8 @@ class ResBlock(tf.keras.layers.Layer):
     def __init__(self, filters: int):
         super().__init__()
 
-        self.conv1 = tf.keras.layers.Conv2D(filters=filters // 2, kernel_size=1, strides=1)
-        self.conv2 = tf.keras.layers.Conv2D(filters=filters, kernel_size=3, strides=1)
+        self.conv1 = tf.keras.layers.Conv2D(filters=filters // 2, kernel_size=1, strides=1, padding="same")
+        self.conv2 = tf.keras.layers.Conv2D(filters=filters, kernel_size=3, strides=1, padding="same")
 
     def call(self, input):
 
