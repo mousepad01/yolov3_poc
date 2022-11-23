@@ -54,7 +54,7 @@ def tests():
     model = Network()
     model.build_components()
 
-    # model.train(data_manager.load_train_data)
+    model.train(data_manager)
 
 def main():
     

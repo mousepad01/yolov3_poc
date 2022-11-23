@@ -58,9 +58,3 @@ def yolov3_loss_persize(output, bool_mask, target_mask):
 
     total_loss = tf.math.reduce_sum(no_object_loss) + tf.math.reduce_sum(object_loss) + tf.math.reduce_sum(classification_loss) + tf.math.reduce_sum(coord_loss)
     return total_loss
-
-# TODO
-@tf.function
-def yolov3_loss():
-    pass
-    

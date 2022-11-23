@@ -160,9 +160,18 @@ class DataManager:
 
         slice_idx = 0
         for imgs in self.load_images("train"):
+
+            bool_mask_size1 = self.bool_anchor_masks[0][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
+            target_mask_size1 = self.target_anchor_masks[0][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
+
+            bool_mask_size2 = self.bool_anchor_masks[1][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
+            target_mask_size2 = self.target_anchor_masks[1][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
+
+            bool_mask_size3 = self.bool_anchor_masks[2][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
+            target_mask_size3 = self.target_anchor_masks[2][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
             
-            yield imgs, self.bool_anchor_masks[slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE], \
-                    self.target_anchor_masks[slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
+            yield imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3
+                    
             slice_idx += 1
 
     def load_train_data_serial(self):

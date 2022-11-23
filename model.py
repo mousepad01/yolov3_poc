@@ -6,6 +6,7 @@ import cv2 as cv
 from utils import *
 from loss import *
 from predictions import *
+from data_processing import *
 
 class ConvLayer(tf.keras.layers.Layer):
 
@@ -31,8 +32,8 @@ class ResBlock(tf.keras.layers.Layer):
     def __init__(self, filters: int):
         super().__init__()
 
-        self.conv1 = tf.keras.layers.Conv2D(filters=filters // 2, kernel_size=1, strides=1, padding="same")
-        self.conv2 = tf.keras.layers.Conv2D(filters=filters, kernel_size=3, strides=1, padding="same")
+        self.conv1 = ConvLayer(filters // 2, 1)
+        self.conv2 = ConvLayer(filters, 3)
 
     def call(self, input):
 
@@ -153,7 +154,7 @@ class Network:
         self.full_network = tf.keras.Model(inputs=input_img, outputs=[output_scale1, output_scale2, output_scale3])
 
     # TODO use tf.data.Dataset
-    def train(self, train_data_loader):
+    def train(self, data_manager: DataManager):
 
         if self.full_network is None:
             print("network not yet initialized")
@@ -172,27 +173,48 @@ class Network:
         # TODO use this term
         DECAY = 5e-4
 
+        TRAIN_BATCH_SIZE = 32
+        BATCH_CNT = len(data_manager.imgs["train"])
+
+        progbar_output = tf.keras.utils.Progbar(BATCH_CNT)
+
         # stage 1
 
         # TODO 
         # first separate training loops for different LR
         # then use lr scheduler
 
-        optimizer = tf.optimizers.SGD(learning_rate=LR_STAGE1, momentum=0.9)
+        epoch_stage = 0
+        for epochs, optimizer in [(EPOCHS_STAGE1, tf.optimizers.SGD(learning_rate=LR_STAGE1, momentum=MOMENTUM)),
+                                    (EPOCHS_STAGE2, tf.optimizers.SGD(learning_rate=LR_STAGE2, momentum=MOMENTUM)),
+                                    (EPOCHS_STAGE3, tf.optimizers.SGD(learning_rate=LR_STAGE3, momentum=MOMENTUM))]:
 
-        for epoch in range(EPOCHS_STAGE1):
+            for epoch in range(epochs):
 
-            print(f"epoch {epoch}")
+                tf.print(f"\nEpoch {epoch} (stage {epoch_stage}):")
 
-            for (imgs, bool_masks, target_masks) in train_data_loader(32):
-                
-                out_s1, out_s2, out_s3 = self.full_network(imgs)
-                print(out_s1.shape, out_s2.shape, out_s3.shape)
+                sum_loss = 0
 
-                # FIXME
-                break
+                batch_idx = 0
+                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_train_data(1):
 
+                    with tf.GradientTape() as tape:
+                    
+                        out_s1, out_s2, out_s3 = self.full_network(imgs, training=True)
 
-        # stage 2
+                        loss_value = yolov3_loss_persize(out_s1, bool_mask_size1, target_mask_size1)
+                        loss_value += yolov3_loss_persize(out_s2, bool_mask_size2, target_mask_size2)
+                        loss_value += yolov3_loss_persize(out_s3, bool_mask_size3, target_mask_size3)
 
-        # stage 3
+                    gradients = tape.gradient(loss_value, self.full_network.trainable_weights)
+                    optimizer.apply_gradients(zip(gradients, self.full_network.trainable_weights))
+
+                    batch_idx += 1
+                    progbar_output.update(batch_idx)
+                    sum_loss += loss_value
+
+                # FIXME 
+                # validation and metrics output
+                tf.print(f"\nLoss value: {floor((sum_loss / BATCH_CNT) * 100) / 100}")
+            
+            epoch_stage += 1
