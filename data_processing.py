@@ -311,10 +311,13 @@ class DataManager:
 
             return intersection / union
         
+        cnt_ = 0
+        
         for img_id in self.imgs["train"].keys():
 
-            # bool_mask = [tf.zeros((GRID_CELL_CNT[d], GRID_CELL_CNT[d], ANCHOR_PERSCALE_CNT, 1), dtype=tf.int32) for d in range(SCALE_CNT)]
-            # target_mask = [tf.zeros((GRID_CELL_CNT[d], GRID_CELL_CNT[d], ANCHOR_PERSCALE_CNT, 5), dtype=tf.int32) for d in range(SCALE_CNT)]
+            cnt_ += 1
+            if cnt_ > 64:
+                break
 
             bool_mask = []
             target_mask = []
