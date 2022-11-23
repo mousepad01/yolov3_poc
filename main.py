@@ -51,7 +51,10 @@ def tests():
 
     # _test_mask_encoding()
 
-    
+    model = Network()
+    model.build_components()
+
+    model.train(data_manager.load_train_data)
 
 def main():
     

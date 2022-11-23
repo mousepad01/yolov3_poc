@@ -120,7 +120,7 @@ class DataManager:
 
             img = np.concatenate([padl, img, padr], 1)
 
-        return cv.resize(img, self.IMG_SIZE)
+        return tf.convert_to_tensor(cv.resize(img, self.IMG_SIZE))
 
     def load_images(self, purpose):
         '''
@@ -151,6 +151,33 @@ class DataManager:
 
             current_loaded = tf.convert_to_tensor(current_loaded)
             yield current_loaded
+
+    def load_train_data(self, batch_size):
+
+        if DATA_LOAD_BATCH_SIZE % batch_size != 0:
+            print("data load batch size not a multiple of train batch size")
+            quit()
+
+        slice_idx = 0
+        for imgs in self.load_images("train"):
+            
+            yield imgs, self.bool_anchor_masks[slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE], \
+                    self.target_anchor_masks[slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
+            slice_idx += 1
+
+    def load_train_data_serial(self):
+        
+        idx = 0
+        for img_id in self.imgs["train"].keys():
+
+            img = cv.imread(self.data_path["train"] + self.imgs["train"][img_id]["filename"])
+            img = self.resize_with_pad(img)
+
+            yield img, self.bool_anchor_masks[idx: idx + 1], self.target_anchor_masks[idx: idx + 1]
+
+            idx += 1
+
+    # TODO load validation data (images, real boxes) to calculate precision, recall ???
 
     def load_info(self):
         '''

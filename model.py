@@ -9,7 +9,7 @@ from predictions import *
 
 class ConvLayer(tf.keras.layers.Layer):
 
-    LEAKY_RELU_RATE = tf.Constant(0.1)
+    LEAKY_RELU_RATE = tf.constant(0.1)
 
     def __init__(self, filters: int, size: int, stride=1, padding="valid"):
         super().__init__()
@@ -91,7 +91,7 @@ class Network:
             includes the full network for object detection (so, everything except backbone classification head)
         '''
 
-    def build_components(self, anchors_per_cell=3, class_count=10):
+    def build_components(self, anchors_per_cell=ANCHOR_PERSCALE_CNT, class_count=10):
         
         # the backbone
         input_img = tf.keras.layers.Input((IMG_SIZE[0], IMG_SIZE[1], 3))
@@ -150,8 +150,10 @@ class Network:
         conv_scale3_6 = ConvLayer(512, 3)(conv_scale3_5)
         output_scale3 = ConvLayer(anchors_per_cell * (4 + 1 + class_count), 1)(conv_scale3_6)
 
-    # TODO
-    def train(self):
+        self.full_network = tf.keras.Model(inputs=input_img, outputs=[output_scale1, output_scale2, output_scale3])
+
+    # TODO use tf.data.Dataset
+    def train(self, train_data_loader):
 
         if self.full_network is None:
             print("network not yet initialized")
@@ -172,6 +174,18 @@ class Network:
 
         # stage 1
 
+        # TODO 
+        # first separate training loops for different LR
+        # then use lr scheduler
+
+        optimizer = tf.optimizers.SGD(learning_rate=LR_STAGE1, momentum=0.9)
+
+        for epoch in range(EPOCHS_STAGE1):
+
+            for (imgs, bool_masks, target_masks) in train_data_loader(32):
+                
+                out_s1, out_s2, out_s3 = self.full_network(imgs)
+                print(out_s1.shape, out_s2.shape, out_s3.shape)
 
 
         # stage 2
