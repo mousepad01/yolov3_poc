@@ -12,6 +12,11 @@ def tests():
 
     def _test_mask_encoding():
 
+        data_manager = DataManager(train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH)
+        data_manager.load_info()
+        data_manager.determine_anchors()
+        data_manager.assign_anchors_to_objects()
+
         output_from_mask = [None for _ in range(SCALE_CNT)]
         for d in range(SCALE_CNT):
 
@@ -43,18 +48,45 @@ def tests():
                             data_manager.onehot_to_name,
                             data_manager.imgs["train"][img_id]["objs"])
 
-    #FIXME
-    data_manager = DataManager(train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH)
-    data_manager.load_info()
-    data_manager.determine_anchors()
-    data_manager.assign_anchors_to_objects()
+    def _test_learning_one_img():
+
+        # BEFORE RUNNING: 
+        # make sure training takes place only on the first img
+
+        #FIXME
+        data_manager = DataManager(train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH)
+        data_manager.load_info()
+        data_manager.determine_anchors()
+        data_manager.assign_anchors_to_objects()
+
+        model = Network(data_manager)
+        model.build_components()
+
+        model.train()
+
+        for img_id in data_manager.imgs["train"].keys():
+            break
+
+        # predict 
+
+        img = cv.imread(data_manager.data_path["train"] + data_manager.imgs["train"][img_id]["filename"])
+        img = data_manager.resize_with_pad(img)
+        
+        out_scale1, out_scale2, out_scale3 = model.full_network(tf.convert_to_tensor([img]))
+
+        output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, data_manager.anchors[0], 0.6)
+        output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, data_manager.anchors[1], 0.6)
+        output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = make_prediction_perscale(out_scale3, data_manager.anchors[2], 0.6)
+
+        output_xy_min = [output_xy_min_scale0, output_xy_min_scale1, output_xy_min_scale2]
+        output_xy_max = [output_xy_max_scale0, output_xy_max_scale1, output_xy_max_scale2]
+        output_class = [output_class_scale0, output_class_scale1, output_class_scale2]
+        output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
+
+        show_prediction(img, output_xy_min, output_xy_max, output_class, output_class_maxp, data_manager.onehot_to_name)
 
     # _test_mask_encoding()
-
-    model = Network()
-    model.build_components()
-
-    model.train(data_manager)
+    _test_learning_one_img()
 
 def main():
     

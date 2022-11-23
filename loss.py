@@ -3,7 +3,7 @@ import tensorflow as tf
 from utils import *
 
 @tf.function
-def yolov3_loss_persize(output, bool_mask, target_mask):
+def yolov3_loss_perscale(output, bool_mask, target_mask):
     '''
         raw output: B x S x S x (A * (C + 5))
         (last dimension: tx, ty, tw, th, to, p0, p1, ...p(C-1))

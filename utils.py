@@ -41,3 +41,8 @@ CLASS_TO_COLOR = [(255, 0, 0), (0, 0, 255), (0, 255, 0), (0, 0, 0), (255, 0, 255
 '''
 for idx, rgb in enumerate(CLASS_TO_COLOR):
     CLASS_TO_COLOR[idx] = (rgb[2], rgb[1], rgb[0])
+
+LOSS_OUTPUT_PRECISION = 3
+'''
+    how many decimals for loss output - does not influence in any way the model
+'''

@@ -63,7 +63,12 @@ class ResSequence(tf.keras.layers.Layer):
 
 class Network:
 
-    def __init__(self):
+    def __init__(self, data_manager):
+
+        self.data_manager: DataManager = data_manager
+        '''
+            contains data info and all that stuff
+        '''
 
         self.backbone: tf.keras.Model = None
         '''
@@ -154,15 +159,15 @@ class Network:
         self.full_network = tf.keras.Model(inputs=input_img, outputs=[output_scale1, output_scale2, output_scale3])
 
     # TODO use tf.data.Dataset
-    def train(self, data_manager: DataManager):
+    def train(self):
 
         if self.full_network is None:
             print("network not yet initialized")
             quit()
 
-        EPOCHS_STAGE1 = 60
-        EPOCHS_STAGE2 = 30
-        EPOCHS_STAGE3 = 70
+        EPOCHS_STAGE1 = 1
+        EPOCHS_STAGE2 = 1
+        EPOCHS_STAGE3 = 1
 
         LR_STAGE1 = 1e-3
         LR_STAGE2 = 1e-4
@@ -173,8 +178,8 @@ class Network:
         # TODO use this term
         DECAY = 5e-4
 
-        TRAIN_BATCH_SIZE = 32
-        BATCH_CNT = len(data_manager.imgs["train"])
+        TRAIN_BATCH_SIZE = DATA_LOAD_BATCH_SIZE
+        BATCH_CNT = len(self.data_manager.imgs["train"])
 
         progbar_output = tf.keras.utils.Progbar(BATCH_CNT)
 
@@ -196,15 +201,15 @@ class Network:
                 sum_loss = 0
 
                 batch_idx = 0
-                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_train_data(1):
+                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_train_data(TRAIN_BATCH_SIZE):
 
                     with tf.GradientTape() as tape:
                     
                         out_s1, out_s2, out_s3 = self.full_network(imgs, training=True)
 
-                        loss_value = yolov3_loss_persize(out_s1, bool_mask_size1, target_mask_size1)
-                        loss_value += yolov3_loss_persize(out_s2, bool_mask_size2, target_mask_size2)
-                        loss_value += yolov3_loss_persize(out_s3, bool_mask_size3, target_mask_size3)
+                        loss_value = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
+                        loss_value += yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
+                        loss_value += yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
 
                     gradients = tape.gradient(loss_value, self.full_network.trainable_weights)
                     optimizer.apply_gradients(zip(gradients, self.full_network.trainable_weights))
@@ -213,8 +218,18 @@ class Network:
                     progbar_output.update(batch_idx)
                     sum_loss += loss_value
 
+                    # FIXME
+                    break
+
                 # FIXME 
                 # validation and metrics output
-                tf.print(f"\nLoss value: {floor((sum_loss / BATCH_CNT) * 100) / 100}")
+                tf.print(f"\nLoss value: {floor((sum_loss / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
             
             epoch_stage += 1
+
+    # TODO
+    def predict(self):
+        
+        if self.full_network is None:
+            print("network not yet initialized")
+            quit()
