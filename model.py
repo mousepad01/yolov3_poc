@@ -8,6 +8,8 @@ from loss import *
 from predictions import *
 from data_processing import *
 
+print("FIXME: RE-INTRODUCE BATCH NORM WHEN FINISHING TESTS WITH 1 IMAGE")
+
 class ConvLayer(tf.keras.layers.Layer):
 
     LEAKY_RELU_RATE = 0.1
@@ -22,7 +24,7 @@ class ConvLayer(tf.keras.layers.Layer):
     def call(self, input):
         
         _temp = self.conv(input)
-        _temp = self.bnorm(_temp)
+        #_temp = self.bnorm(_temp)
         y = self.leaky_relu(_temp)
 
         return y

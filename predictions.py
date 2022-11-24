@@ -27,7 +27,7 @@ def _get_c_idx(S):
 
     return c_idx
 
-@tf.function
+#@tf.function
 def make_prediction_perscale(output, anchors, THRESHOLD=0.6):
     '''
         output: B x S x S x (A * (C + 5))
@@ -39,7 +39,7 @@ def make_prediction_perscale(output, anchors, THRESHOLD=0.6):
     S, A = output.shape[1], output.shape[3]
 
     # anchors relative to the grid cell count for the current scale
-    anchors = tf.reshape(anchors, (1, 1, 1, A, 2))
+    anchors = tf.cast(tf.reshape(anchors, (1, 1, 1, A, 2)), tf.float32)
 
     c_idx = _get_c_idx(S)
     grid_cells_cnt = tf.reshape(tf.convert_to_tensor([S, S], dtype=tf.float32), (1, 1, 1, 1, 2))
@@ -86,8 +86,10 @@ def show_prediction(image, pred_xy_min, pred_xy_max, pred_class, pred_class_p, c
         (optional) ground truth info: [{"category": one hot idx, "bbox": (x, y, w, h) absolute}, ...]
     '''
 
-    img_px_size = tf.convert_to_tensor(image.shape[:2], dtype=tf.float32)
-    img_px_size = tf.reshape(img_px_size, (1, 1, 1, 1, 2))
+    image = np.array(image)
+
+    img_px_size = tf.convert_to_tensor(image.shape[:2])
+    img_px_size = tf.cast(tf.reshape(img_px_size, (1, 1, 1, 1, 2)), dtype=tf.float32)
 
     for d in range(SCALE_CNT):
 

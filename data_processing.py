@@ -170,7 +170,7 @@ class DataManager:
             bool_mask_size3 = self.bool_anchor_masks[2][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
             target_mask_size3 = self.target_anchor_masks[2][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
             
-            yield imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3
+            yield tf.cast(imgs, tf.float32) / 255.0, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3
                     
             slice_idx += 1
 
@@ -182,7 +182,7 @@ class DataManager:
             img = cv.imread(self.data_path["train"] + self.imgs["train"][img_id]["filename"])
             img = self.resize_with_pad(img)
 
-            yield img, self.bool_anchor_masks[idx: idx + 1], self.target_anchor_masks[idx: idx + 1]
+            yield tf.cast(img, tf.float32) / 255.0, self.bool_anchor_masks[idx: idx + 1], self.target_anchor_masks[idx: idx + 1]
 
             idx += 1
 
