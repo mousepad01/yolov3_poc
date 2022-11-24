@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from utils import *
 
-@tf.function
+#@tf.function
 def yolov3_loss_perscale(output, bool_mask, target_mask):
     '''
         raw output: B x S x S x (A * (C + 5))
@@ -38,7 +38,7 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
     '''
 
     COORD_FACTOR = tf.constant(5.0)
-    NOOBJ_FACTOR = tf.constant(.5)
+    NOOBJ_FACTOR = tf.constant(.005)
 
     # FIXME exclude more elements from no obj loss ???
     # no-object loss
@@ -54,7 +54,19 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
     # coordinates loss
     target_coord_xy = target_mask[..., 0:2]
     target_coord_wh = target_mask[..., 2:4]
-    coord_loss = COORD_FACTOR * bool_mask * (tf.square(target_coord_xy - output_xy) + tf.square(target_coord_wh - output_wh))
-
+    #coord_loss = COORD_FACTOR * bool_mask * (tf.square(target_coord_xy - output_xy) + tf.square(target_coord_wh - output_wh))
+    xy_loss = COORD_FACTOR * bool_mask * tf.square(target_coord_xy - output_xy)
+    wh_loss = COORD_FACTOR * bool_mask * tf.square(target_coord_wh - output_wh)
+    coord_loss = xy_loss + wh_loss
+    
+    print(f"no obj loss = {tf.math.reduce_sum(no_object_loss)}")
+    print(f"obj loss = {tf.math.reduce_sum(object_loss)}")
+    print(f"classif loss = {tf.math.reduce_sum(classification_loss)}")
+    print(f"xy loss = {tf.math.reduce_sum(xy_loss)}")
+    print(f"wh loss = {tf.math.reduce_sum(wh_loss)}")
+    print(f"coord loss = {tf.math.reduce_sum(coord_loss)}")
+    print("\n")
+    
     total_loss = tf.math.reduce_sum(no_object_loss) + tf.math.reduce_sum(object_loss) + tf.math.reduce_sum(classification_loss) + tf.math.reduce_sum(coord_loss)
-    return total_loss
+    return total_loss, tf.math.reduce_sum(no_object_loss), tf.math.reduce_sum(object_loss), tf.math.reduce_sum(classification_loss), \
+            tf.math.reduce_sum(xy_loss), tf.math.reduce_sum(wh_loss)

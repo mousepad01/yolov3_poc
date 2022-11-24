@@ -143,6 +143,8 @@ def show_prediction(image, pred_xy_min, pred_xy_max, pred_class, pred_class_p, c
             else:
                 class_output = predicted_class
 
+            print(f"prediction: {(y_min, x_min)}, {(y_max, x_max)}, {class_output}: {floor(predicted_class_p * 100) / 100}%")
+
             cv.rectangle(image, (y_min, x_min), (y_max, x_max), color=CLASS_TO_COLOR[predicted_class], thickness=2)
             cv.putText(image, text=f"{class_output}: {floor(predicted_class_p * 100) / 100}%", org=(y_min, x_min - 10), fontFace=cv.FONT_HERSHEY_SIMPLEX, fontScale=0.4, color=CLASS_TO_COLOR[predicted_class], thickness=1)
 

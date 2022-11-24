@@ -9,6 +9,8 @@ from predictions import *
 from data_processing import *
 
 print("FIXME: RE-INTRODUCE BATCH NORM WHEN FINISHING TESTS WITH 1 IMAGE")
+print("FIXME: train after done testing code")
+print("FIXME: FIX NO OBJ LOSS FACTOR")
 
 class ConvLayer(tf.keras.layers.Layer):
 
@@ -169,7 +171,7 @@ class Network:
 
         EPOCHS_STAGE1 = 1
         EPOCHS_STAGE2 = 1
-        EPOCHS_STAGE3 = 1
+        EPOCHS_STAGE3 = 0
 
         LR_STAGE1 = 1e-3
         LR_STAGE2 = 1e-4
@@ -181,7 +183,7 @@ class Network:
         DECAY = 5e-4
 
         TRAIN_BATCH_SIZE = DATA_LOAD_BATCH_SIZE
-        BATCH_CNT = len(self.data_manager.imgs["train"])
+        BATCH_CNT = 1 # len(self.data_manager.imgs["train"])
 
         progbar_output = tf.keras.utils.Progbar(BATCH_CNT)
 
@@ -190,6 +192,13 @@ class Network:
         # TODO 
         # first separate training loops for different LR
         # then use lr scheduler
+
+        loss_stats = []
+        loss_stats_noobj = []
+        loss_stats_obj = []
+        loss_stats_cl = []
+        loss_stats_xy = []
+        loss_stats_wh = []
 
         epoch_stage = 0
         for epochs, optimizer in [(EPOCHS_STAGE1, tf.optimizers.SGD(learning_rate=LR_STAGE1, momentum=MOMENTUM)),
@@ -201,6 +210,11 @@ class Network:
                 tf.print(f"\nEpoch {epoch} (stage {epoch_stage}):")
 
                 sum_loss = 0
+                sum_loss_noobj = 0
+                sum_loss_obj = 0
+                sum_loss_cl = 0
+                sum_loss_xy = 0
+                sum_loss_wh = 0
 
                 batch_idx = 0
                 for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_train_data(TRAIN_BATCH_SIZE):
@@ -209,9 +223,23 @@ class Network:
                     
                         out_s1, out_s2, out_s3 = self.full_network(imgs, training=True)
 
-                        loss_value = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
-                        loss_value += yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
-                        loss_value += yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
+                        loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
+
+                        loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
+                        loss_value += loss_value_
+                        noobj += noobj_
+                        obj += obj_
+                        cl += cl_
+                        xy += xy_
+                        wh += wh_
+                        
+                        loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
+                        loss_value += loss_value_
+                        noobj += noobj_
+                        obj += obj_
+                        cl += cl_
+                        xy += xy_
+                        wh += wh_
 
                     gradients = tape.gradient(loss_value, self.full_network.trainable_weights)
                     optimizer.apply_gradients(zip(gradients, self.full_network.trainable_weights))
@@ -219,15 +247,52 @@ class Network:
                     batch_idx += 1
                     progbar_output.update(batch_idx)
                     sum_loss += loss_value
+                    sum_loss_noobj += noobj
+                    sum_loss_obj += obj
+                    sum_loss_cl += cl
+                    sum_loss_xy += xy
+                    sum_loss_wh += wh
 
                     # FIXME
                     break
 
-                # FIXME 
-                # validation and metrics output
                 tf.print(f"\nLoss value: {floor((sum_loss / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
-            
+                loss_stats.append(floor((sum_loss / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+                loss_stats_noobj.append(floor((sum_loss_noobj / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+                loss_stats_obj.append(floor((sum_loss_obj / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+                loss_stats_cl.append(floor((sum_loss_cl / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+                loss_stats_xy.append(floor((sum_loss_xy / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+                loss_stats_wh.append(floor((sum_loss_wh / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+                
             epoch_stage += 1
+
+        fig, ax = plt.subplots(3, 2)
+        
+        ax[0][0].plot([idx for idx in range(len(loss_stats))],
+                        loss_stats)
+        ax[0][0].grid(True)
+
+        ax[0][1].plot([idx for idx in range(len(loss_stats))],
+                        loss_stats_noobj)
+        ax[0][1].grid(True)
+
+        ax[1][0].plot([idx for idx in range(len(loss_stats))],
+                        loss_stats_obj)
+        ax[1][0].grid(True)
+
+        ax[1][1].plot([idx for idx in range(len(loss_stats))],
+                        loss_stats_cl)
+        ax[1][1].grid(True)
+
+        ax[2][0].plot([idx for idx in range(len(loss_stats))],
+                        loss_stats_xy)
+        ax[2][0].grid(True)
+
+        ax[2][1].plot([idx for idx in range(len(loss_stats))],
+                        loss_stats_wh)
+        ax[2][1].grid(True)
+
+        plt.show()
 
     # TODO
     def predict(self):

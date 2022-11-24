@@ -74,9 +74,11 @@ def tests():
         
         out_scale1, out_scale2, out_scale3 = model.full_network(tf.convert_to_tensor([img]))
 
-        output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, data_manager.anchors[0], 0.6)
-        output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, data_manager.anchors[1], 0.6)
-        output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = make_prediction_perscale(out_scale3, data_manager.anchors[2], 0.6)
+        anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
+
+        output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, anchors_relative[0], 0.6)
+        output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, anchors_relative[1], 0.6)
+        output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = make_prediction_perscale(out_scale3, anchors_relative[2], 0.6)
 
         output_xy_min = [output_xy_min_scale0, output_xy_min_scale1, output_xy_min_scale2]
         output_xy_max = [output_xy_max_scale0, output_xy_max_scale1, output_xy_max_scale2]
