@@ -18,10 +18,10 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
 
     output = tf.reshape(output, (output.shape[0], output.shape[1], output.shape[2], ANCHOR_PERSCALE_CNT, -1))
 
-    # sigma(tx), sigma(ty), tw, th     - ti relative to grid cell count for that scale
-    output_xy = tf.sigmoid(output[..., 0:2])
+    # tx, ty, tw, th     - ti relative to grid cell count for that scale
+    # output_xy = tf.sigmoid(output[..., 0:2])
+    output_xy = output[..., 0:2]
     output_wh = output[..., 2:4]
-    # TODO try sigma(tx), sigma(ty), e^tw, e^th     - ti relative to grid cell count for that scale
 
     # sigma(to)     = Pr(object) (in yolov3) or Pr(object) * IOU(b, object) in yolov2
     output_confidence = tf.sigmoid(output[..., 4:5])

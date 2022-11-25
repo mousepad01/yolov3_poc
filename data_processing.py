@@ -368,8 +368,8 @@ class DataManager:
                 anchor_h = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][1] / IMG_SIZE[0])
 
                 bool_mask[max_iou_scale][cx][cy][max_iou_idx] = [1]
-                target_mask[max_iou_scale][cx][cy][max_iou_idx] = [x, 
-                                                                    y,
+                target_mask[max_iou_scale][cx][cy][max_iou_idx] = [tf.math.log(x / (1 - x)), 
+                                                                    tf.math.log(y / (1 - y)),
                                                                     tf.math.log(w / anchor_w), 
                                                                     tf.math.log(h / anchor_h),
                                                                     categ]
