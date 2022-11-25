@@ -37,15 +37,15 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
         * coordinate loss
     '''
 
-    COORD_FACTOR = tf.constant(5.0)
-    NOOBJ_FACTOR = tf.constant(.005)
-
     # FIXME exclude more elements from no obj loss ???
     # no-object loss
-    no_object_loss = NOOBJ_FACTOR * (1 - bool_mask) * tf.square(0 - output_confidence)
+    neg_bool_mask = 1 - bool_mask
+    no_object_loss = neg_bool_mask *  tf.keras.losses.binary_crossentropy(neg_bool_mask, output_confidence)
+    # no_object_loss = neg_bool_mask * tf.square(0 - output_confidence)
 
     # object loss
-    object_loss = bool_mask * tf.square(1 - output_confidence)
+    object_loss = bool_mask * tf.keras.losses.binary_crossentropy(bool_mask, output_confidence)
+    # object_loss = bool_mask * tf.square(1 - output_confidence)
 
     # classification loss
     target_class = tf.one_hot(tf.cast(target_mask[..., 4], dtype=tf.int32), output_class_p.shape[4])
@@ -54,9 +54,8 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
     # coordinates loss
     target_coord_xy = target_mask[..., 0:2]
     target_coord_wh = target_mask[..., 2:4]
-    #coord_loss = COORD_FACTOR * bool_mask * (tf.square(target_coord_xy - output_xy) + tf.square(target_coord_wh - output_wh))
-    xy_loss = COORD_FACTOR * bool_mask * tf.square(target_coord_xy - output_xy)
-    wh_loss = COORD_FACTOR * bool_mask * tf.square(target_coord_wh - output_wh)
+    xy_loss =  bool_mask * tf.square(target_coord_xy - output_xy)
+    wh_loss =  bool_mask * tf.square(target_coord_wh - output_wh)
     coord_loss = xy_loss + wh_loss
     
     print(f"no obj loss = {tf.math.reduce_sum(no_object_loss)}")

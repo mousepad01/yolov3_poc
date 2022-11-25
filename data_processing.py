@@ -300,6 +300,7 @@ class DataManager:
         anchor_finder = AnchorFinder(self.imgs)
         self.anchors = tf.cast(tf.convert_to_tensor(anchor_finder.get_anchors()), tf.int32)
 
+    # FIXME
     def assign_anchors_to_objects(self):
 
         if self.used_categories == {}:

@@ -162,6 +162,7 @@ class Network:
 
         self.full_network = tf.keras.Model(inputs=input_img, outputs=[output_scale1, output_scale2, output_scale3])
 
+    # FIXME
     # TODO use tf.data.Dataset
     def train(self):
 
@@ -169,11 +170,11 @@ class Network:
             print("network not yet initialized")
             quit()
 
-        EPOCHS_STAGE1 = 1
-        EPOCHS_STAGE2 = 1
+        EPOCHS_STAGE1 = 100
+        EPOCHS_STAGE2 = 30
         EPOCHS_STAGE3 = 0
 
-        LR_STAGE1 = 1e-3
+        LR_STAGE1 = 1e-6
         LR_STAGE2 = 1e-4
         LR_STAGE3 = 1e-5
 
@@ -241,6 +242,9 @@ class Network:
                         xy += xy_
                         wh += wh_
 
+                    if len(loss_stats) > 2 and loss_value > loss_stats[-1] and loss_value > loss_stats[-2]:
+                        break
+
                     gradients = tape.gradient(loss_value, self.full_network.trainable_weights)
                     optimizer.apply_gradients(zip(gradients, self.full_network.trainable_weights))
 
@@ -254,6 +258,9 @@ class Network:
                     sum_loss_wh += wh
 
                     # FIXME
+                    break
+
+                if len(loss_stats) > 2 and loss_value > loss_stats[-1] and loss_value > loss_stats[-2]:
                     break
 
                 tf.print(f"\nLoss value: {floor((sum_loss / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
@@ -271,26 +278,32 @@ class Network:
         ax[0][0].plot([idx for idx in range(len(loss_stats))],
                         loss_stats)
         ax[0][0].grid(True)
+        ax[0][0].set_title("total loss")
 
         ax[0][1].plot([idx for idx in range(len(loss_stats))],
                         loss_stats_noobj)
         ax[0][1].grid(True)
+        ax[0][1].set_title("noobj")
 
         ax[1][0].plot([idx for idx in range(len(loss_stats))],
                         loss_stats_obj)
         ax[1][0].grid(True)
+        ax[1][0].set_title("obj")
 
         ax[1][1].plot([idx for idx in range(len(loss_stats))],
                         loss_stats_cl)
         ax[1][1].grid(True)
+        ax[1][1].set_title("cl")
 
         ax[2][0].plot([idx for idx in range(len(loss_stats))],
                         loss_stats_xy)
         ax[2][0].grid(True)
+        ax[2][0].set_title("xy")
 
         ax[2][1].plot([idx for idx in range(len(loss_stats))],
                         loss_stats_wh)
         ax[2][1].grid(True)
+        ax[2][1].set_title("wh")
 
         plt.show()
 
