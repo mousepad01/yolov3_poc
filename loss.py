@@ -26,12 +26,15 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
         * coordinate loss
     '''
 
+    NO_OBJ_COEF = 0.005
+    COORD_COEF = 1
+
     # FIXME exclude more elements from no obj loss ???
     # no-object loss
     output_confidence = tf.sigmoid(output[..., 4:5])
     neg_bool_mask = 1 - bool_mask
     no_object_loss = neg_bool_mask *  tf.expand_dims(tf.keras.losses.binary_crossentropy(bool_mask, output_confidence), axis=-1)
-    no_object_loss = 0.001 * tf.math.reduce_sum(no_object_loss)
+    no_object_loss = NO_OBJ_COEF * tf.math.reduce_sum(no_object_loss)
 
     # object loss
     object_loss = bool_mask * tf.expand_dims(tf.keras.losses.binary_crossentropy(bool_mask, output_confidence), axis=-1)
@@ -52,7 +55,7 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
     xy_loss = tf.math.reduce_sum(xy_loss)
     wh_loss =  bool_mask * tf.square(target_coord_wh - output_wh)
     wh_loss = tf.math.reduce_sum(wh_loss)
-    coord_loss = xy_loss + wh_loss
+    coord_loss = COORD_COEF * (xy_loss + wh_loss)
     
     print(f"no obj loss = {no_object_loss}")
     print(f"obj loss = {object_loss}")

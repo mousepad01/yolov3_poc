@@ -97,8 +97,8 @@ def tests():
 
         show_prediction(img, output_xy_min, output_xy_max, output_class, output_class_maxp, data_manager.onehot_to_name)
 
-    #_test_mask_encoding()
-    _test_learning_one_img()
+    _test_mask_encoding()
+    #_test_learning_one_img()
 
 def main():
     
