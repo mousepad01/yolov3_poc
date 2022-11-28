@@ -67,7 +67,12 @@ def tests():
 
         model.train()
 
+        # FIXME
+        idx_ = 0
         for img_id in data_manager.imgs["train"].keys():
+            if idx_ == 0:
+                idx_ += 1
+                continue            
             break
 
         # predict 
@@ -75,7 +80,7 @@ def tests():
         img = cv.imread(data_manager.data_path["train"] + data_manager.imgs["train"][img_id]["filename"])
         img = data_manager.resize_with_pad(img)
         
-        out_scale1, out_scale2, out_scale3 = model.full_network(tf.convert_to_tensor([img]), training=True)
+        out_scale1, out_scale2, out_scale3 = model.full_network(tf.convert_to_tensor([img]))#, training=True)
 
         anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
 
@@ -97,8 +102,8 @@ def tests():
 
         show_prediction(img, output_xy_min, output_xy_max, output_class, output_class_maxp, data_manager.onehot_to_name)
 
-    _test_mask_encoding()
-    #_test_learning_one_img()
+    #_test_mask_encoding()
+    _test_learning_one_img()
 
 def main():
     

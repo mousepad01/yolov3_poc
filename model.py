@@ -27,7 +27,7 @@ class ConvLayer(tf.keras.layers.Layer):
     def call(self, input):
         
         _temp = self.conv(input)
-        _temp = self.bnorm(_temp)
+        #_temp = self.bnorm(_temp)
         y = self.leaky_relu(_temp)
 
         return y
@@ -175,9 +175,9 @@ class Network:
         EPOCHS_STAGE2 = 200
         EPOCHS_STAGE3 = 20
 
-        LR_STAGE1 = 1e-3
-        LR_STAGE2 = 1e-4
-        LR_STAGE3 = 1e-5
+        LR_STAGE1 = 1e-4
+        LR_STAGE2 = 1e-5
+        LR_STAGE3 = 1e-6
 
         MOMENTUM = 0.9
 
@@ -203,9 +203,12 @@ class Network:
         loss_stats_wh = []
 
         epoch_stage = 0
-        for epochs, optimizer in [(EPOCHS_STAGE1, tf.optimizers.SGD(learning_rate=LR_STAGE1, momentum=MOMENTUM)),
+        '''for epochs, optimizer in [(EPOCHS_STAGE1, tf.optimizers.SGD(learning_rate=LR_STAGE1, momentum=MOMENTUM)),
                                     (EPOCHS_STAGE2, tf.optimizers.SGD(learning_rate=LR_STAGE2, momentum=MOMENTUM)),
-                                    (EPOCHS_STAGE3, tf.optimizers.SGD(learning_rate=LR_STAGE3, momentum=MOMENTUM))]:
+                                    (EPOCHS_STAGE3, tf.optimizers.SGD(learning_rate=LR_STAGE3, momentum=MOMENTUM))]:'''
+        for epochs, optimizer in [(EPOCHS_STAGE1, tf.optimizers.Adam(learning_rate=LR_STAGE1)),
+                                    (EPOCHS_STAGE2, tf.optimizers.Adam(learning_rate=LR_STAGE2)),
+                                    (EPOCHS_STAGE3, tf.optimizers.Adam(learning_rate=LR_STAGE3))]:
 
             for epoch in range(epochs):
 
