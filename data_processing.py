@@ -152,6 +152,7 @@ class DataManager:
             current_loaded = tf.convert_to_tensor(current_loaded)
             yield current_loaded
 
+    # FIXME NORMALIZATION
     def load_train_data(self, batch_size):
 
         if DATA_LOAD_BATCH_SIZE % batch_size != 0:

@@ -40,32 +40,34 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
     # FIXME exclude more elements from no obj loss ???
     # no-object loss
     neg_bool_mask = 1 - bool_mask
-    no_object_loss = neg_bool_mask *  tf.keras.losses.binary_crossentropy(neg_bool_mask, output_confidence)
-    # no_object_loss = neg_bool_mask * tf.square(0 - output_confidence)
+    no_object_loss = neg_bool_mask *  tf.expand_dims(tf.keras.losses.binary_crossentropy(bool_mask, output_confidence), axis=-1)
+    no_object_loss = 0.001 * tf.math.reduce_sum(no_object_loss)
 
     # object loss
-    object_loss = bool_mask * tf.keras.losses.binary_crossentropy(bool_mask, output_confidence)
-    # object_loss = bool_mask * tf.square(1 - output_confidence)
+    object_loss = bool_mask * tf.expand_dims(tf.keras.losses.binary_crossentropy(bool_mask, output_confidence), axis=-1)
+    object_loss = tf.math.reduce_sum(object_loss)
 
     # classification loss
     target_class = tf.one_hot(tf.cast(target_mask[..., 4], dtype=tf.int32), output_class_p.shape[4])
     classification_loss = bool_mask * tf.expand_dims(tf.keras.losses.categorical_crossentropy(target_class, output_class_p), axis=-1)
+    classification_loss = tf.math.reduce_sum(classification_loss)
 
     # coordinates loss
     target_coord_xy = target_mask[..., 0:2]
     target_coord_wh = target_mask[..., 2:4]
     xy_loss =  bool_mask * tf.square(target_coord_xy - output_xy)
+    xy_loss = tf.math.reduce_sum(xy_loss)
     wh_loss =  bool_mask * tf.square(target_coord_wh - output_wh)
+    wh_loss = tf.math.reduce_sum(wh_loss)
     coord_loss = xy_loss + wh_loss
     
-    print(f"no obj loss = {tf.math.reduce_sum(no_object_loss)}")
-    print(f"obj loss = {tf.math.reduce_sum(object_loss)}")
-    print(f"classif loss = {tf.math.reduce_sum(classification_loss)}")
-    print(f"xy loss = {tf.math.reduce_sum(xy_loss)}")
-    print(f"wh loss = {tf.math.reduce_sum(wh_loss)}")
-    print(f"coord loss = {tf.math.reduce_sum(coord_loss)}")
+    print(f"no obj loss = {no_object_loss}")
+    print(f"obj loss = {object_loss}")
+    print(f"classif loss = {classification_loss}")
+    print(f"xy loss = {xy_loss}")
+    print(f"wh loss = {wh_loss}")
+    print(f"coord loss = {coord_loss}")
     print("\n")
     
-    total_loss = tf.math.reduce_sum(no_object_loss) + tf.math.reduce_sum(object_loss) + tf.math.reduce_sum(classification_loss) + tf.math.reduce_sum(coord_loss)
-    return total_loss, tf.math.reduce_sum(no_object_loss), tf.math.reduce_sum(object_loss), tf.math.reduce_sum(classification_loss), \
-            tf.math.reduce_sum(xy_loss), tf.math.reduce_sum(wh_loss)
+    total_loss = no_object_loss + object_loss + classification_loss + coord_loss
+    return total_loss, no_object_loss, object_loss, classification_loss, xy_loss, wh_loss

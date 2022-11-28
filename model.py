@@ -2,6 +2,7 @@ from math import floor
 import numpy as np
 import tensorflow as tf
 import cv2 as cv
+import pickle
 
 from utils import *
 from loss import *
@@ -26,7 +27,7 @@ class ConvLayer(tf.keras.layers.Layer):
     def call(self, input):
         
         _temp = self.conv(input)
-        #_temp = self.bnorm(_temp)
+        _temp = self.bnorm(_temp)
         y = self.leaky_relu(_temp)
 
         return y
@@ -170,11 +171,11 @@ class Network:
             print("network not yet initialized")
             quit()
 
-        EPOCHS_STAGE1 = 100
-        EPOCHS_STAGE2 = 30
+        EPOCHS_STAGE1 = 2000
+        EPOCHS_STAGE2 = 0
         EPOCHS_STAGE3 = 0
 
-        LR_STAGE1 = 1e-6
+        LR_STAGE1 = 1e-3
         LR_STAGE2 = 1e-4
         LR_STAGE3 = 1e-5
 
@@ -242,7 +243,7 @@ class Network:
                         xy += xy_
                         wh += wh_
 
-                    if len(loss_stats) > 2 and loss_value > loss_stats[-1] and loss_value > loss_stats[-2]:
+                    if loss_value > 300:
                         break
 
                     gradients = tape.gradient(loss_value, self.full_network.trainable_weights)
@@ -260,8 +261,10 @@ class Network:
                     # FIXME
                     break
 
-                if len(loss_stats) > 2 and loss_value > loss_stats[-1] and loss_value > loss_stats[-2]:
+                if loss_value > 300:
                     break
+
+                    
 
                 tf.print(f"\nLoss value: {floor((sum_loss / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
                 loss_stats.append(floor((sum_loss / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
@@ -272,6 +275,10 @@ class Network:
                 loss_stats_wh.append(floor((sum_loss_wh / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
                 
             epoch_stage += 1
+
+        loss_dump = [loss_stats, loss_stats_noobj, loss_stats_obj, loss_stats_cl, loss_stats_xy, loss_stats_wh]
+        with open("loss_stats_dump.bin", "wb+") as fd:
+            pickle.dump(loss_dump, fd)
 
         fig, ax = plt.subplots(3, 2)
         

@@ -4,3 +4,5 @@ data_train.zip
 data
 test.py
 *idea*
+*.bin
+*img*
