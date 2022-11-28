@@ -153,7 +153,6 @@ class DataManager:
             current_loaded = tf.convert_to_tensor(current_loaded)
             yield current_loaded
 
-    # FIXME SLICE IDX SKIP
     def load_train_data(self, batch_size):
 
         if DATA_LOAD_BATCH_SIZE % batch_size != 0:
@@ -162,9 +161,6 @@ class DataManager:
 
         slice_idx = 0
         for imgs in self.load_images("train"):
-
-            if slice_idx == 0:
-                pass
 
             bool_mask_size1 = self.bool_anchor_masks[0][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
             target_mask_size1 = self.target_anchor_masks[0][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]

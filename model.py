@@ -172,8 +172,8 @@ class Network:
             quit()
 
         EPOCHS_STAGE1 = 100
-        EPOCHS_STAGE2 = 200
-        EPOCHS_STAGE3 = 20
+        EPOCHS_STAGE2 = 50
+        EPOCHS_STAGE3 = 0
 
         LR_STAGE1 = 1e-4
         LR_STAGE2 = 1e-5

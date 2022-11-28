@@ -67,40 +67,38 @@ def tests():
 
         model.train()
 
-        # FIXME
-        idx_ = 0
-        for img_id in data_manager.imgs["train"].keys():
-            if idx_ == 0:
-                idx_ += 1
-                continue            
+        for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_train_data(1):
+
+            out_scale1, out_scale2, out_scale3 = model.full_network(tf.convert_to_tensor([img]))#, training=True)
+
+            loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale1, bool_mask_size1, target_mask_size1)
+            print(loss_value, noobj, obj, cl, xy, wh)
+            loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale2, bool_mask_size2, target_mask_size2)
+            print(loss_value, noobj, obj, cl, xy, wh)
+            loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale3, bool_mask_size3, target_mask_size3)
+            print(loss_value, noobj, obj, cl, xy, wh)
+
+            anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
+
+            #with open("out_pickle_dump.bin", "wb+") as fd:
+            #   pickle.dump([anchors_relative, out_scale1, out_scale2, out_scale3], fd)
+            
+            #with open("out_pickle_dump.bin", "rb") as fd:
+            #   l = pickle.load(fd)
+            #  anchors_relative, out_scale1, out_scale2, out_scale3 = l
+        
+            output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, anchors_relative[0], 0.6)
+            output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, anchors_relative[1], 0.6)
+            output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = make_prediction_perscale(out_scale3, anchors_relative[2], 0.6)
+
+            output_xy_min = [output_xy_min_scale0, output_xy_min_scale1, output_xy_min_scale2]
+            output_xy_max = [output_xy_max_scale0, output_xy_max_scale1, output_xy_max_scale2]
+            output_class = [output_class_scale0, output_class_scale1, output_class_scale2]
+            output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
+
+            show_prediction(img, output_xy_min, output_xy_max, output_class, output_class_maxp, data_manager.onehot_to_name)
+
             break
-
-        # predict 
-
-        img = cv.imread(data_manager.data_path["train"] + data_manager.imgs["train"][img_id]["filename"])
-        img = data_manager.resize_with_pad(img)
-        
-        out_scale1, out_scale2, out_scale3 = model.full_network(tf.convert_to_tensor([img]))#, training=True)
-
-        anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
-
-        #with open("out_pickle_dump.bin", "wb+") as fd:
-         #   pickle.dump([anchors_relative, out_scale1, out_scale2, out_scale3], fd)
-        
-        #with open("out_pickle_dump.bin", "rb") as fd:
-         #   l = pickle.load(fd)
-          #  anchors_relative, out_scale1, out_scale2, out_scale3 = l
-    
-        output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, anchors_relative[0], 0.9)
-        output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, anchors_relative[1], 0.9)
-        output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = make_prediction_perscale(out_scale3, anchors_relative[2], 0.9)
-
-        output_xy_min = [output_xy_min_scale0, output_xy_min_scale1, output_xy_min_scale2]
-        output_xy_max = [output_xy_max_scale0, output_xy_max_scale1, output_xy_max_scale2]
-        output_class = [output_class_scale0, output_class_scale1, output_class_scale2]
-        output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
-
-        show_prediction(img, output_xy_min, output_xy_max, output_class, output_class_maxp, data_manager.onehot_to_name)
 
     #_test_mask_encoding()
     _test_learning_one_img()
