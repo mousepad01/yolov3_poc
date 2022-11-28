@@ -7,8 +7,6 @@ from anchor_kmeans import *
 from model import *
 
 print("NOTE: this implementation relies on the fact that dictionaries are ORDERED. yielding keys in a nedeterministic order breaks everything")
-print("TODO: for class loss, use probability predicted (which is conditioned) or multiply with objectness to obtain unconditioned probability")
-print("TODO: encode mask probability with one_hot from the preprocessing phase")
 
 def tests():
 
@@ -69,7 +67,7 @@ def tests():
 
         for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_train_data(1):
 
-            out_scale1, out_scale2, out_scale3 = model.full_network(tf.convert_to_tensor([img]))#, training=True)
+            out_scale1, out_scale2, out_scale3 = model.full_network(img)#, training=True)
 
             loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale1, bool_mask_size1, target_mask_size1)
             print(loss_value, noobj, obj, cl, xy, wh)
@@ -96,7 +94,7 @@ def tests():
             output_class = [output_class_scale0, output_class_scale1, output_class_scale2]
             output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
 
-            show_prediction(img, output_xy_min, output_xy_max, output_class, output_class_maxp, data_manager.onehot_to_name)
+            show_prediction(np.array(img[0]), output_xy_min, output_xy_max, output_class, output_class_maxp, data_manager.onehot_to_name)
 
             break
 
