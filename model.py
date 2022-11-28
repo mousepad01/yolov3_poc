@@ -171,9 +171,9 @@ class Network:
             print("network not yet initialized")
             quit()
 
-        EPOCHS_STAGE1 = 300
-        EPOCHS_STAGE2 = 200
-        EPOCHS_STAGE3 = 50
+        EPOCHS_STAGE1 = 400
+        EPOCHS_STAGE2 = 400
+        EPOCHS_STAGE3 = 100
 
         LR_STAGE1 = 1e-4
         LR_STAGE2 = 1e-5
