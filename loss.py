@@ -26,8 +26,8 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
         * coordinate loss
     '''
 
-    NO_OBJ_COEF = 0.005
-    COORD_COEF = 1
+    NO_OBJ_COEF = 0.5
+    COORD_COEF = 5
 
     # FIXME exclude more elements from no obj loss ???
     # no-object loss

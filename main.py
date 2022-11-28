@@ -67,7 +67,7 @@ def tests():
 
         for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_train_data(1):
 
-            out_scale1, out_scale2, out_scale3 = model.full_network(img)#, training=True)
+            out_scale1, out_scale2, out_scale3 = model.full_network(img)
 
             loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale1, bool_mask_size1, target_mask_size1)
             print(loss_value, noobj, obj, cl, xy, wh)
@@ -77,13 +77,6 @@ def tests():
             print(loss_value, noobj, obj, cl, xy, wh)
 
             anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
-
-            #with open("out_pickle_dump.bin", "wb+") as fd:
-            #   pickle.dump([anchors_relative, out_scale1, out_scale2, out_scale3], fd)
-            
-            #with open("out_pickle_dump.bin", "rb") as fd:
-            #   l = pickle.load(fd)
-            #  anchors_relative, out_scale1, out_scale2, out_scale3 = l
         
             output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, anchors_relative[0], 0.6)
             output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, anchors_relative[1], 0.6)

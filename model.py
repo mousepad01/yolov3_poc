@@ -171,9 +171,9 @@ class Network:
             print("network not yet initialized")
             quit()
 
-        EPOCHS_STAGE1 = 100
-        EPOCHS_STAGE2 = 50
-        EPOCHS_STAGE3 = 0
+        EPOCHS_STAGE1 = 300
+        EPOCHS_STAGE2 = 200
+        EPOCHS_STAGE3 = 50
 
         LR_STAGE1 = 1e-4
         LR_STAGE2 = 1e-5
@@ -246,9 +246,6 @@ class Network:
                         xy += xy_
                         wh += wh_
 
-                    #if loss_value > 300:
-                     #   break
-
                     gradients = tape.gradient(loss_value, self.full_network.trainable_weights)
                     optimizer.apply_gradients(zip(gradients, self.full_network.trainable_weights))
 
@@ -263,9 +260,6 @@ class Network:
 
                     # FIXME
                     break
-
-                #if loss_value > 300:
-                 #   break
 
                 tf.print(f"\nLoss value: {floor((sum_loss / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
                 loss_stats.append(floor((sum_loss / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
