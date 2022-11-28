@@ -6,28 +6,17 @@ from utils import *
 def yolov3_loss_perscale(output, bool_mask, target_mask):
     '''
         raw output: B x S x S x (A * (C + 5))
-        (last dimension: tx, ty, tw, th, to, p0, p1, ...p(C-1))
+        (last dimension: tx, ty, tw, th, to, l0, l1, ...l(C-1))
 
         anchors: A x 2
 
         bool_mask: B x S x S x A x 1
 
-        target_mask: B x S x S x A x 5
-        (last dimension: sigma(tx), sigma(ty), tw, th, i from [0, C - 1])
+        target_mask: B x S x S x A x (4 + C)
+        (last dimension: sigma(tx), sigma(ty), tw, th, p0, p1, ...p(C-1))
     '''
 
     output = tf.reshape(output, (output.shape[0], output.shape[1], output.shape[2], ANCHOR_PERSCALE_CNT, -1))
-
-    # tx, ty, tw, th     - ti relative to grid cell count for that scale
-    # output_xy = tf.sigmoid(output[..., 0:2])
-    output_xy = output[..., 0:2]
-    output_wh = output[..., 2:4]
-
-    # sigma(to)     = Pr(object) (in yolov3) or Pr(object) * IOU(b, object) in yolov2
-    output_confidence = tf.sigmoid(output[..., 4:5])
-
-    # softmax over p0, ... p(C-1)
-    output_class_p = tf.keras.activations.softmax(output[..., 5:])
 
     '''
         4 losses:
@@ -39,6 +28,7 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
 
     # FIXME exclude more elements from no obj loss ???
     # no-object loss
+    output_confidence = tf.sigmoid(output[..., 4:5])
     neg_bool_mask = 1 - bool_mask
     no_object_loss = neg_bool_mask *  tf.expand_dims(tf.keras.losses.binary_crossentropy(bool_mask, output_confidence), axis=-1)
     no_object_loss = 0.001 * tf.math.reduce_sum(no_object_loss)
@@ -48,11 +38,14 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
     object_loss = tf.math.reduce_sum(object_loss)
 
     # classification loss
-    target_class = tf.one_hot(tf.cast(target_mask[..., 4], dtype=tf.int32), output_class_p.shape[4])
+    output_class_p = tf.keras.activations.softmax(output[..., 5:])
+    target_class = target_mask[..., 4:]
     classification_loss = bool_mask * tf.expand_dims(tf.keras.losses.categorical_crossentropy(target_class, output_class_p), axis=-1)
     classification_loss = tf.math.reduce_sum(classification_loss)
 
     # coordinates loss
+    output_xy = output[..., 0:2]
+    output_wh = output[..., 2:4]
     target_coord_xy = target_mask[..., 0:2]
     target_coord_wh = target_mask[..., 2:4]
     xy_loss =  bool_mask * tf.square(target_coord_xy - output_xy)

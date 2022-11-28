@@ -1,4 +1,5 @@
 import json
+import time
 
 import cv2 as cv
 import numpy as np
@@ -336,7 +337,7 @@ class DataManager:
             for d in range(SCALE_CNT):
 
                 bool_mask.append([[[[0] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])])
-                target_mask.append([[[[0, 0, 0, 0, 0] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])])
+                target_mask.append([[[[0 for _ in range(4 + len(self.category_onehot_to_id))] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])])
 
             for bbox_d in self.imgs["train"][img_id]["objs"]:
 
@@ -369,11 +370,12 @@ class DataManager:
                 anchor_h = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][1] / IMG_SIZE[0])
 
                 bool_mask[max_iou_scale][cx][cy][max_iou_idx] = [1]
-                target_mask[max_iou_scale][cx][cy][max_iou_idx] = [tf.math.log(x / (1 - x)), 
-                                                                    tf.math.log(y / (1 - y)),
-                                                                    tf.math.log(w / anchor_w), 
-                                                                    tf.math.log(h / anchor_h),
-                                                                    categ]
+                target_mask[max_iou_scale][cx][cy][max_iou_idx] = tf.concat([tf.convert_to_tensor([tf.math.log(x / (1 - x))]), 
+                                                                            tf.convert_to_tensor([tf.math.log(y / (1 - y))]),
+                                                                            tf.convert_to_tensor([tf.math.log(w / anchor_w)]), 
+                                                                            tf.convert_to_tensor([tf.math.log(h / anchor_h)]),
+                                                                            tf.cast(tf.one_hot(categ, len(self.category_onehot_to_id)), dtype=tf.double)],
+                                                                            axis=0)
 
             for d in range(SCALE_CNT):
 

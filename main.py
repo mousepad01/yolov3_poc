@@ -7,6 +7,8 @@ from anchor_kmeans import *
 from model import *
 
 print("NOTE: this implementation relies on the fact that dictionaries are ORDERED. yielding keys in a nedeterministic order breaks everything")
+print("TODO: for class loss, use probability predicted (which is conditioned) or multiply with objectness to obtain unconditioned probability")
+print("TODO: encode mask probability with one_hot from the preprocessing phase")
 
 def tests():
 
@@ -27,7 +29,7 @@ def tests():
             tw_th = data_manager.target_anchor_masks[d][..., 2:4] * data_manager.bool_anchor_masks[d]
             to = tf.cast(tf.fill((B, S, S, A, 1), value=10.0), dtype=tf.float32) * data_manager.bool_anchor_masks[d] + \
                     tf.cast(tf.fill((B, S, S, A, 1), value=-10.0), dtype=tf.float32) * (1 - data_manager.bool_anchor_masks[d])
-            probabilities = tf.cast(tf.one_hot(tf.cast(data_manager.target_anchor_masks[d][..., 4], tf.int32), len(data_manager.used_categories.keys())) * 10, dtype=tf.float32)
+            probabilities = data_manager.target_anchor_masks[d][..., 4:] * 10
             output_from_mask[d] = tf.concat([tx_ty, tw_th, to, probabilities], axis=-1) 
 
         anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
@@ -73,16 +75,20 @@ def tests():
         img = cv.imread(data_manager.data_path["train"] + data_manager.imgs["train"][img_id]["filename"])
         img = data_manager.resize_with_pad(img)
         
-        out_scale1, out_scale2, out_scale3 = model.full_network(tf.convert_to_tensor([img]))
+        out_scale1, out_scale2, out_scale3 = model.full_network(tf.convert_to_tensor([img]), training=True)
 
         anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
 
-        with open("out_pickle_dump.bin", "wb+") as fd:
-            pickle.dump([anchors_relative, out_scale1, out_scale2, out_scale3], fd)
-
-        output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, anchors_relative[0], 0.6)
-        output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, anchors_relative[1], 0.6)
-        output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = make_prediction_perscale(out_scale3, anchors_relative[2], 0.6)
+        #with open("out_pickle_dump.bin", "wb+") as fd:
+         #   pickle.dump([anchors_relative, out_scale1, out_scale2, out_scale3], fd)
+        
+        #with open("out_pickle_dump.bin", "rb") as fd:
+         #   l = pickle.load(fd)
+          #  anchors_relative, out_scale1, out_scale2, out_scale3 = l
+    
+        output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, anchors_relative[0], 0.9)
+        output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, anchors_relative[1], 0.9)
+        output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = make_prediction_perscale(out_scale3, anchors_relative[2], 0.9)
 
         output_xy_min = [output_xy_min_scale0, output_xy_min_scale1, output_xy_min_scale2]
         output_xy_max = [output_xy_max_scale0, output_xy_max_scale1, output_xy_max_scale2]
@@ -91,8 +97,8 @@ def tests():
 
         show_prediction(img, output_xy_min, output_xy_max, output_class, output_class_maxp, data_manager.onehot_to_name)
 
-    _test_mask_encoding()
-    #_test_learning_one_img()
+    #_test_mask_encoding()
+    _test_learning_one_img()
 
 def main():
     
