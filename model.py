@@ -232,15 +232,15 @@ class Network:
 
     # FIXME
     # TODO use tf.data.Dataset
-    def train(self):
+    def train(self, optimizers):
 
         if self.full_network is None:
             print("network not yet initialized")
             quit()
 
-        EPOCHS_STAGE1 = 800
-        EPOCHS_STAGE2 = 800
-        EPOCHS_STAGE3 = 100
+        EPOCHS_STAGE1 = 10
+        EPOCHS_STAGE2 = 0
+        EPOCHS_STAGE3 = 0
 
         LR_STAGE1 = 1e-4
         LR_STAGE2 = 1e-5
@@ -252,7 +252,7 @@ class Network:
         DECAY = 5e-4
 
         TRAIN_BATCH_SIZE = DATA_LOAD_BATCH_SIZE
-        BATCH_CNT = 1 # len(self.data_manager.imgs["train"])
+        BATCH_CNT = len(self.data_manager.imgs["train"])
 
         progbar_output = tf.keras.utils.Progbar(BATCH_CNT)
 

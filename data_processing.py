@@ -1,5 +1,6 @@
 import json
 import time
+import pickle
 
 import cv2 as cv
 import numpy as np
@@ -21,6 +22,8 @@ class DataManager:
     TRAIN_INFO_PATH = "./data/annotations/instances_train2017.json"
     VALIDATION_INFO_PATH = "./data/annotations/instances_val2017.json"
 
+    CACHE_PATH = "./cache_entries/"
+
     def __init__(self, train_data_path=TRAIN_DATA_PATH,
                         train_info_path=TRAIN_INFO_PATH,
                         validation_data_path=VALIDATION_DATA_PATH,
@@ -28,6 +31,7 @@ class DataManager:
 
                         data_load_batch_size=DATA_LOAD_BATCH_SIZE,
                         img_size=IMG_SIZE,
+                        cache_key=None,
                     ):
         
         self.data_path = {
@@ -77,22 +81,32 @@ class DataManager:
         self.anchors = []
         '''
             D x A x 2 (D = SCALE_COUNT)
+            * cacheable
         '''
 
         self.bool_anchor_masks = [[] for _ in range(SCALE_CNT)]
         '''
             for each scale,
                 B x S[scale] x S[scale] x A x 1     - whether that anchor is responsible for an object or not
+            * cacheable
         '''
         self.target_anchor_masks = [[] for _ in range(SCALE_CNT)]
         '''
             for each scale,
                 B x S[scale] x S[scale] x A x 5     - regression targets and the class given by its one_hot index (but NOT one_hot encoded)            
+            * cacheable
         '''
 
         self.DATA_LOAD_BATCH_SIZE = data_load_batch_size
 
         self.IMG_SIZE = img_size
+
+        self.cache_key = cache_key
+        '''
+            determining anchors and assigning them to each bounding box can be done only once for a specific dataset
+            * if cache_key is given and there is such cache, it upload data cached under this key when specific operations are called; 
+            * if cache_key is given but there is no such cache, it will create it;
+        '''
 
     def resize_with_pad(self, img):
         '''
@@ -302,10 +316,31 @@ class DataManager:
             print("info not yet loaded")
             quit()
 
+        if self.cache_key is not None:
+
+            try:
+                
+                with open(f"{self.CACHE_PATH}/{self.cache_key}_anchors.bin", "rb") as cache_f:
+                    raw_cache = cache_f.read()
+
+                self.anchors = pickle.loads(raw_cache)
+
+                print("Cache found. Anchors loaded")
+                return
+
+            except FileNotFoundError:
+                print("Cache not found. Operations will be fully executed and a new cache will be created")
+
         anchor_finder = AnchorFinder(self.imgs)
         self.anchors = tf.cast(tf.convert_to_tensor(anchor_finder.get_anchors()), tf.int32)
 
-    # FIXME
+        if self.cache_key is not None:
+
+            new_cache = pickle.dumps(self.anchors)
+
+            with open(f"{self.CACHE_PATH}/{self.cache_key}_anchors.bin", "wb+") as cache_f:
+                cache_f.write(new_cache)
+
     def assign_anchors_to_objects(self):
 
         if self.used_categories == {}:
@@ -315,6 +350,26 @@ class DataManager:
         if self.anchors == []:
             print("anchors not yet determined")
             quit()
+
+        if self.cache_key is not None:
+
+            try:
+
+                with open(f"{self.CACHE_PATH}/{self.cache_key}_bool_masks.bin", "rb") as cache_f:
+                    raw_cache = cache_f.read()
+
+                self.bool_anchor_masks = pickle.loads(raw_cache)
+
+                with open(f"{self.CACHE_PATH}/{self.cache_key}_target_masks.bin", "rb") as cache_f:
+                    raw_cache = cache_f.read()
+
+                self.target_anchor_masks = pickle.loads(raw_cache)
+
+                print("Cache found. Ground truth masks loaded")
+                return
+
+            except FileNotFoundError:
+                print("Cache not found. Operations will be fully executed and a new cache will be created")
 
         def _iou(anchor, w, h):
             
@@ -326,13 +381,13 @@ class DataManager:
 
             return intersection / union
         
-        cnt_ = 0
+        #cnt_ = 0
         
         for img_id in self.imgs["train"].keys():
 
-            cnt_ += 1
-            if cnt_ > 64:
-                break
+            #cnt_ += 1
+            #if cnt_ > 64:
+            #    break
 
             bool_mask = []
             target_mask = []
@@ -395,3 +450,15 @@ class DataManager:
 
             self.bool_anchor_masks[d] = tf.convert_to_tensor(self.bool_anchor_masks[d], dtype=tf.float32)
             self.target_anchor_masks[d] = tf.convert_to_tensor(self.target_anchor_masks[d], dtype=tf.float32)
+
+        if self.cache_key is not None:
+
+            new_cache = pickle.dumps(self.bool_anchor_masks)
+
+            with open(f"{self.CACHE_PATH}/{self.cache_key}_bool_masks.bin", "wb+") as cache_f:
+                cache_f.write(new_cache)
+
+            new_cache = pickle.dumps(self.target_anchor_masks)
+
+            with open(f"{self.CACHE_PATH}/{self.cache_key}_target_masks.bin", "wb+") as cache_f:
+                cache_f.write(new_cache)

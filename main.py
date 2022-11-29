@@ -104,10 +104,55 @@ def tests():
 
         model.show_stats()
 
-    #_test_mask_encoding()
-    _test_learning_one_img()
-    #_plot_model_stats()
+    def _test_cache():
+
+        data_manager = DataManager(train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH, cache_key="0")
+        data_manager.load_info()
+        data_manager.determine_anchors()
+        data_manager.assign_anchors_to_objects()
+
+        print(data_manager.target_anchor_masks[0].shape, data_manager.target_anchor_masks[1].shape, data_manager.target_anchor_masks[2].shape)
+
+    def _test_train():
+
+        # BEFORE RUNNING: 
+        # make sure training takes place only on the first img
+
+        data_manager = DataManager(train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH)
+        data_manager.load_info()
+        data_manager.determine_anchors()
+        data_manager.assign_anchors_to_objects()
+
+        model = Network(data_manager)
+        model.build_components(backbone="small")
+
+        model.train()
+
+        for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_train_data(1):
+
+            out_scale1, out_scale2, out_scale3 = model.full_network(img)
+
+            anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
         
+            output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, anchors_relative[0], 0.6)
+            output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, anchors_relative[1], 0.6)
+            output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = make_prediction_perscale(out_scale3, anchors_relative[2], 0.6)
+
+            output_xy_min = [output_xy_min_scale0, output_xy_min_scale1, output_xy_min_scale2]
+            output_xy_max = [output_xy_max_scale0, output_xy_max_scale1, output_xy_max_scale2]
+            output_class = [output_class_scale0, output_class_scale1, output_class_scale2]
+            output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
+
+            show_prediction(np.array(img[0]), output_xy_min, output_xy_max, output_class, output_class_maxp, data_manager.onehot_to_name)
+
+            break
+
+    #_test_mask_encoding()
+    #_test_learning_one_img()
+    #_plot_model_stats()
+    _test_cache()
+    #_test_train()
+    
 def main():
     
     tests()
