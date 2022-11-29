@@ -162,7 +162,7 @@ class DataManager:
         slice_idx = 0
         for imgs in self.load_images("train"):
 
-            if slice_idx < 2:
+            if slice_idx < 4:
                 slice_idx += 1
                 continue
 

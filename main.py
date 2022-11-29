@@ -62,7 +62,7 @@ def tests():
         data_manager.assign_anchors_to_objects()
 
         model = Network(data_manager)
-        model.build_components()
+        model.build_components(backbone="small")
 
         model.train()
 
@@ -92,9 +92,22 @@ def tests():
 
             break
 
+    def _plot_model_stats():
+
+        data_manager = DataManager(train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH)
+        data_manager.load_info()
+        data_manager.determine_anchors()
+        data_manager.assign_anchors_to_objects()
+
+        model = Network(data_manager)
+        model.build_components()
+
+        model.show_stats()
+
     #_test_mask_encoding()
     _test_learning_one_img()
-
+    #_plot_model_stats()
+        
 def main():
     
     tests()
