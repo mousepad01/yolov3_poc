@@ -34,7 +34,8 @@ def tests():
 
         cnt_ = 0
         for img_id in data_manager.imgs["train"].keys():
-
+            
+            print(img_id)
             cnt_ += 1
 
             img = cv.imread(data_manager.data_path["train"] + data_manager.imgs["train"][img_id]["filename"])

@@ -162,6 +162,10 @@ class DataManager:
         slice_idx = 0
         for imgs in self.load_images("train"):
 
+            if slice_idx < 2:
+                slice_idx += 1
+                continue
+
             bool_mask_size1 = self.bool_anchor_masks[0][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
             target_mask_size1 = self.target_anchor_masks[0][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
 
@@ -360,6 +364,12 @@ class DataManager:
                 x, y = x + w // 2, y + h // 2
                 x, y, w, h = x / IMG_SIZE[0], y / IMG_SIZE[0], w / IMG_SIZE[0], h / IMG_SIZE[0]
                 x, y, w, h = x * GRID_CELL_CNT[max_iou_scale], y * GRID_CELL_CNT[max_iou_scale], w * GRID_CELL_CNT[max_iou_scale], h * GRID_CELL_CNT[max_iou_scale]
+
+                if x == np.floor(x):
+                    x -= 0.05
+
+                if y == np.floor(y):
+                    y -= 0.05
 
                 cx, cy = np.int32(np.floor(x)), np.int32(np.floor(y))
                 x, y = x - cx, y - cy   # x - cx, y - cy == sigmoid(tx) - cx, sigmoid(ty) - cy <=> x = sigmoid(tx), y = sigmoid(ty)

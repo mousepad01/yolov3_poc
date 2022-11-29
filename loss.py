@@ -13,7 +13,7 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
         bool_mask: B x S x S x A x 1
 
         target_mask: B x S x S x A x (4 + C)
-        (last dimension: sigma(tx), sigma(ty), tw, th, p0, p1, ...p(C-1))
+        (last dimension: tx, ty, tw, th, p0, p1, ...p(C-1))
     '''
 
     output = tf.reshape(output, (output.shape[0], output.shape[1], output.shape[2], ANCHOR_PERSCALE_CNT, -1))
