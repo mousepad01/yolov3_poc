@@ -7,6 +7,7 @@ from anchor_kmeans import *
 from model import *
 
 print("NOTE: this implementation relies on the fact that dictionaries are ORDERED. yielding keys in a nedeterministic order breaks everything")
+print("TODO: ADD TEST DATA!!!!!!!!!!")
 
 def tests():
 
@@ -102,7 +103,7 @@ def tests():
         model = Network(data_manager)
         model.build_components()
 
-        model.show_stats()
+        model.show_architecture_stats()
 
     def _test_cache():
 

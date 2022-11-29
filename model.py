@@ -427,13 +427,31 @@ class Network:
 
         _plot_losses()
 
-    def show_stats(self):
+    def show_architecture_stats(self):
         self.full_network.summary()
         tf.keras.utils.plot_model(self.full_network, show_shapes=True)
 
-    # TODO
-    def predict(self):
+    # FIXME
+    # use test data, not validation data ????
+    def predict(self, threshold=0.6):
         
         if self.full_network is None:
             print("network not yet initialized")
             quit()
+
+        for (img, _, _, _, _, _, _) in self.data_manager.load_data(1, "validation"):
+
+            out_scale1, out_scale2, out_scale3 = self.full_network(img, training=False)
+
+            anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (self.data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
+        
+            output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, anchors_relative[0], threshold)
+            output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, anchors_relative[1], threshold)
+            output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = make_prediction_perscale(out_scale3, anchors_relative[2], threshold)
+
+            output_xy_min = [output_xy_min_scale0, output_xy_min_scale1, output_xy_min_scale2]
+            output_xy_max = [output_xy_max_scale0, output_xy_max_scale1, output_xy_max_scale2]
+            output_class = [output_class_scale0, output_class_scale1, output_class_scale2]
+            output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
+
+            show_prediction(np.array(img[0]), output_xy_min, output_xy_max, output_class, output_class_maxp, self.data_manager.onehot_to_name)
