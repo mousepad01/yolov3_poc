@@ -28,7 +28,7 @@ def _get_c_idx(S):
 
     return c_idx
 
-#@tf.function
+@tf.function
 def make_prediction_perscale(output, anchors, THRESHOLD=0.6):
     '''
         output: B x S x S x (A * (C + 5))

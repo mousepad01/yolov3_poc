@@ -84,16 +84,24 @@ class DataManager:
             * cacheable
         '''
 
-        self.bool_anchor_masks = [[] for _ in range(SCALE_CNT)]
+        self.bool_anchor_masks = {
+                                        "train": [[] for _ in range(SCALE_CNT)],
+                                        "validation": [[] for _ in range(SCALE_CNT)]
+                                    }
         '''
-            for each scale,
-                B x S[scale] x S[scale] x A x 1     - whether that anchor is responsible for an object or not
+            for each purpose,
+                for each scale,
+                    B x S[scale] x S[scale] x A x 1     - whether that anchor is responsible for an object or not
             * cacheable
         '''
-        self.target_anchor_masks = [[] for _ in range(SCALE_CNT)]
+        self.target_anchor_masks = {
+                                        "train": [[] for _ in range(SCALE_CNT)],
+                                        "validation": [[] for _ in range(SCALE_CNT)]
+                                    }
         '''
-            for each scale,
-                B x S[scale] x S[scale] x A x 5     - regression targets and the class given by its one_hot index (but NOT one_hot encoded)            
+            for each purpose,
+                for each scale,
+                    B x S[scale] x S[scale] x A x 5     - regression targets and the class given by its one_hot index (but NOT one_hot encoded)            
             * cacheable
         '''
 
@@ -167,45 +175,39 @@ class DataManager:
             current_loaded = tf.convert_to_tensor(current_loaded)
             yield current_loaded
 
-    def load_train_data(self, batch_size):
+    def load_data(self, batch_size, purpose):
 
         if DATA_LOAD_BATCH_SIZE % batch_size != 0:
-            print("data load batch size not a multiple of train batch size")
+            print("Data load batch size not a multiple of train batch size")
             quit()
 
         slice_idx = 0
-        for imgs in self.load_images("train"):
+        for imgs in self.load_images(purpose):
 
-            if slice_idx < 4:
-                slice_idx += 1
-                continue
+            bool_mask_size1 = self.bool_anchor_masks[purpose][0][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
+            target_mask_size1 = self.target_anchor_masks[purpose][0][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
 
-            bool_mask_size1 = self.bool_anchor_masks[0][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
-            target_mask_size1 = self.target_anchor_masks[0][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
+            bool_mask_size2 = self.bool_anchor_masks[purpose][1][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
+            target_mask_size2 = self.target_anchor_masks[purpose][1][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
 
-            bool_mask_size2 = self.bool_anchor_masks[1][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
-            target_mask_size2 = self.target_anchor_masks[1][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
-
-            bool_mask_size3 = self.bool_anchor_masks[2][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
-            target_mask_size3 = self.target_anchor_masks[2][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
+            bool_mask_size3 = self.bool_anchor_masks[purpose][2][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
+            target_mask_size3 = self.target_anchor_masks[purpose][2][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
             
             yield tf.cast(imgs, tf.float32) / 255.0, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3
                     
             slice_idx += 1
 
-    def load_train_data_serial(self):
+    def load_data_serial(self, purpose):
         
         idx = 0
-        for img_id in self.imgs["train"].keys():
+        for img_id in self.imgs[purpose].keys():
 
-            img = cv.imread(self.data_path["train"] + self.imgs["train"][img_id]["filename"])
+            img = cv.imread(self.data_path[purpose] + self.imgs[purpose][img_id]["filename"])
             img = self.resize_with_pad(img)
 
-            yield tf.cast(img, tf.float32) / 255.0, self.bool_anchor_masks[idx: idx + 1], self.target_anchor_masks[idx: idx + 1]
+            yield tf.cast(img, tf.float32) / 255.0, self.bool_anchor_masks[purpose][idx: idx + 1], self.target_anchor_masks[purpose][idx: idx + 1]
 
             idx += 1
-
-    # TODO load validation data (images, real boxes) to calculate precision, recall ???
 
     def load_info(self):
         '''
@@ -380,76 +382,71 @@ class DataManager:
             union = w * h + anchor[0] * anchor[1] - intersection
 
             return intersection / union
-        
-        #cnt_ = 0
-        
-        for img_id in self.imgs["train"].keys():
 
-            #cnt_ += 1
-            #if cnt_ > 64:
-            #    break
+        for purpose in ["train", "validation"]:
+            for img_id in self.imgs[purpose].keys():
 
-            bool_mask = []
-            target_mask = []
-
-            for d in range(SCALE_CNT):
-
-                bool_mask.append([[[[0] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])])
-                target_mask.append([[[[0 for _ in range(4 + len(self.category_onehot_to_id))] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])])
-
-            for bbox_d in self.imgs["train"][img_id]["objs"]:
-
-                categ = np.int32(bbox_d["category"])
-                x, y, w, h = bbox_d["bbox"]
-
-                max_iou = -1
-                max_iou_idx = None
-                max_iou_scale = None
+                bool_mask = []
+                target_mask = []
 
                 for d in range(SCALE_CNT):
-                    for a in range(ANCHOR_PERSCALE_CNT):
 
-                        current_iou = _iou(self.anchors[d][a], w, h)
-                        if current_iou > max_iou:
-                            
-                            max_iou = current_iou
-                            max_iou_idx = a
-                            max_iou_scale = d
+                    bool_mask.append([[[[0] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])])
+                    target_mask.append([[[[0 for _ in range(4 + len(self.category_onehot_to_id))] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])])
 
-                x, y = x + w // 2, y + h // 2
-                x, y, w, h = x / IMG_SIZE[0], y / IMG_SIZE[0], w / IMG_SIZE[0], h / IMG_SIZE[0]
-                x, y, w, h = x * GRID_CELL_CNT[max_iou_scale], y * GRID_CELL_CNT[max_iou_scale], w * GRID_CELL_CNT[max_iou_scale], h * GRID_CELL_CNT[max_iou_scale]
+                for bbox_d in self.imgs[purpose][img_id]["objs"]:
 
-                if x == np.floor(x):
-                    x -= 0.05
+                    categ = np.int32(bbox_d["category"])
+                    x, y, w, h = bbox_d["bbox"]
 
-                if y == np.floor(y):
-                    y -= 0.05
+                    max_iou = -1
+                    max_iou_idx = None
+                    max_iou_scale = None
 
-                cx, cy = np.int32(np.floor(x)), np.int32(np.floor(y))
-                x, y = x - cx, y - cy   # x - cx, y - cy == sigmoid(tx) - cx, sigmoid(ty) - cy <=> x = sigmoid(tx), y = sigmoid(ty)
+                    for d in range(SCALE_CNT):
+                        for a in range(ANCHOR_PERSCALE_CNT):
 
-                # get anchor w and h relative to the grid cell count
-                anchor_w = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][0] / IMG_SIZE[0])
-                anchor_h = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][1] / IMG_SIZE[0])
+                            current_iou = _iou(self.anchors[d][a], w, h)
+                            if current_iou > max_iou:
+                                
+                                max_iou = current_iou
+                                max_iou_idx = a
+                                max_iou_scale = d
 
-                bool_mask[max_iou_scale][cx][cy][max_iou_idx] = [1]
-                target_mask[max_iou_scale][cx][cy][max_iou_idx] = tf.concat([tf.convert_to_tensor([tf.math.log(x / (1 - x))]), 
-                                                                            tf.convert_to_tensor([tf.math.log(y / (1 - y))]),
-                                                                            tf.convert_to_tensor([tf.math.log(w / anchor_w)]), 
-                                                                            tf.convert_to_tensor([tf.math.log(h / anchor_h)]),
-                                                                            tf.cast(tf.one_hot(categ, len(self.category_onehot_to_id)), dtype=tf.double)],
-                                                                            axis=0)
+                    x, y = x + w // 2, y + h // 2
+                    x, y, w, h = x / IMG_SIZE[0], y / IMG_SIZE[0], w / IMG_SIZE[0], h / IMG_SIZE[0]
+                    x, y, w, h = x * GRID_CELL_CNT[max_iou_scale], y * GRID_CELL_CNT[max_iou_scale], w * GRID_CELL_CNT[max_iou_scale], h * GRID_CELL_CNT[max_iou_scale]
+
+                    if x == np.floor(x):
+                        x -= 0.05
+
+                    if y == np.floor(y):
+                        y -= 0.05
+
+                    cx, cy = np.int32(np.floor(x)), np.int32(np.floor(y))
+                    x, y = x - cx, y - cy   # x - cx, y - cy == sigmoid(tx) - cx, sigmoid(ty) - cy <=> x = sigmoid(tx), y = sigmoid(ty)
+
+                    # get anchor w and h relative to the grid cell count
+                    anchor_w = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][0] / IMG_SIZE[0])
+                    anchor_h = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][1] / IMG_SIZE[0])
+
+                    bool_mask[max_iou_scale][cx][cy][max_iou_idx] = [1]
+                    target_mask[max_iou_scale][cx][cy][max_iou_idx] = tf.concat([tf.convert_to_tensor([tf.math.log(x / (1 - x))]), 
+                                                                                tf.convert_to_tensor([tf.math.log(y / (1 - y))]),
+                                                                                tf.convert_to_tensor([tf.math.log(w / anchor_w)]), 
+                                                                                tf.convert_to_tensor([tf.math.log(h / anchor_h)]),
+                                                                                tf.cast(tf.one_hot(categ, len(self.category_onehot_to_id)), dtype=tf.double)],
+                                                                                axis=0)
+
+                for d in range(SCALE_CNT):
+
+                    self.bool_anchor_masks[purpose][d].append(bool_mask[d])
+                    self.target_anchor_masks[purpose][d].append(target_mask[d])
 
             for d in range(SCALE_CNT):
 
-                self.bool_anchor_masks[d].append(bool_mask[d])
-                self.target_anchor_masks[d].append(target_mask[d])
-
-        for d in range(SCALE_CNT):
-
-            self.bool_anchor_masks[d] = tf.convert_to_tensor(self.bool_anchor_masks[d], dtype=tf.float32)
-            self.target_anchor_masks[d] = tf.convert_to_tensor(self.target_anchor_masks[d], dtype=tf.float32)
+                self.bool_anchor_masks[purpose][d] = tf.convert_to_tensor(self.bool_anchor_masks[purpose][d], dtype=tf.float32)
+                self.target_anchor_masks[purpose][d] = tf.convert_to_tensor(self.target_anchor_masks[purpose][d], dtype=tf.float32)
 
         if self.cache_key is not None:
 

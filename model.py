@@ -230,7 +230,6 @@ class Network:
             print("unknown backbone")
             quit()
 
-    # FIXME
     # TODO use tf.data.Dataset
     def train(self, optimizers):
 
@@ -238,48 +237,105 @@ class Network:
             print("network not yet initialized")
             quit()
 
-        EPOCHS_STAGE1 = 10
-        EPOCHS_STAGE2 = 0
-        EPOCHS_STAGE3 = 0
-
-        LR_STAGE1 = 1e-4
-        LR_STAGE2 = 1e-5
-        LR_STAGE3 = 1e-6
-
-        MOMENTUM = 0.9
-
-        # TODO use this term
-        DECAY = 5e-4
-
+        # FIXME
+        # in the future, vary these parameters
         TRAIN_BATCH_SIZE = DATA_LOAD_BATCH_SIZE
-        BATCH_CNT = len(self.data_manager.imgs["train"])
+        VALIDATION_BATCH_SIZE = DATA_LOAD_BATCH_SIZE
 
-        progbar_output = tf.keras.utils.Progbar(BATCH_CNT)
+        TRAIN_BATCH_CNT = len(self.data_manager.imgs["train"]) // TRAIN_BATCH_SIZE
+        VALIDATION_BATCH_CNT = len(self.data_manager.imgs["validation"]) // VALIDATION_BATCH_SIZE
 
-        # stage 1
+        train_loss_stats = []
+        train_loss_stats_noobj = []
+        train_loss_stats_obj = []
+        train_loss_stats_cl = []
+        train_loss_stats_xy = []
+        train_loss_stats_wh = []
 
-        # TODO 
-        # first separate training loops for different LR
-        # then use lr scheduler
+        validation_loss_stats = []
+        validation_loss_stats_noobj = []
+        validation_loss_stats_obj = []
+        validation_loss_stats_cl = []
+        validation_loss_stats_xy = []
+        validation_loss_stats_wh = []
 
-        loss_stats = []
-        loss_stats_noobj = []
-        loss_stats_obj = []
-        loss_stats_cl = []
-        loss_stats_xy = []
-        loss_stats_wh = []
+        def _log_show_losses():
+
+            train_loss_stats.append(floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+            train_loss_stats_noobj.append(floor((sum_loss_noobj / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+            train_loss_stats_obj.append(floor((sum_loss_obj / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+            train_loss_stats_cl.append(floor((sum_loss_cl / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+            train_loss_stats_xy.append(floor((sum_loss_xy / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+            train_loss_stats_wh.append(floor((sum_loss_wh / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+
+            validation_loss_stats.append(floor((val_loss / VALIDATION_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+            validation_loss_stats_noobj.append(floor((val_loss_noobj / VALIDATION_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+            validation_loss_stats_obj.append(floor((val_loss_obj / VALIDATION_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+            validation_loss_stats_cl.append(floor((val_loss_cl / VALIDATION_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+            validation_loss_stats_xy.append(floor((val_loss_xy / VALIDATION_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+            validation_loss_stats_wh.append(floor((val_loss_wh / VALIDATION_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+
+            tf.print(f"\n===================================================================================================================\n")
+            tf.print(f"\nTrain total loss:           {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
+            tf.print(f"\nTrain (no-)objectness loss: {floor((sum_loss_noobj / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
+            tf.print(f"\nTrain objectness loss:      {floor((sum_loss_obj / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
+            tf.print(f"\nTrain classification loss:  {floor((sum_loss_cl / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
+            tf.print(f"\nTrain x-y loss:             {floor((sum_loss_xy / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
+            tf.print(f"\nTrain w-h loss:             {floor((sum_loss_wh / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
+            tf.print(f"\n")
+            tf.print(f"\nValidation total loss:           {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
+            tf.print(f"\nValidation (no-)objectness loss: {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
+            tf.print(f"\nValidation objectness loss:      {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
+            tf.print(f"\nValidation classification loss:  {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
+            tf.print(f"\nValidation x-y loss:             {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
+            tf.print(f"\nValidation w-h loss:             {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
+            tf.print(f"\n===================================================================================================================\n")
+
+        def _plot_losses():
+
+            _, ax = plt.subplots(3, 2)
+        
+            ax[0][0].plot([idx for idx in range(len(train_loss_stats))],
+                            train_loss_stats)
+            ax[0][0].grid(True)
+            ax[0][0].set_title("total loss")
+
+            ax[0][1].plot([idx for idx in range(len(train_loss_stats))],
+                            train_loss_stats_noobj)
+            ax[0][1].grid(True)
+            ax[0][1].set_title("(no-)objectness loss")
+
+            ax[1][0].plot([idx for idx in range(len(train_loss_stats))],
+                            train_loss_stats_obj)
+            ax[1][0].grid(True)
+            ax[1][0].set_title("objectness loss")
+
+            ax[1][1].plot([idx for idx in range(len(train_loss_stats))],
+                            train_loss_stats_cl)
+            ax[1][1].grid(True)
+            ax[1][1].set_title("classification loss")
+
+            ax[2][0].plot([idx for idx in range(len(train_loss_stats))],
+                            train_loss_stats_xy)
+            ax[2][0].grid(True)
+            ax[2][0].set_title("x-y loss")
+
+            ax[2][1].plot([idx for idx in range(len(train_loss_stats))],
+                            train_loss_stats_wh)
+            ax[2][1].grid(True)
+            ax[2][1].set_title("w-h loss")
+
+            plt.show()
 
         epoch_stage = 0
-        '''for epochs, optimizer in [(EPOCHS_STAGE1, tf.optimizers.SGD(learning_rate=LR_STAGE1, momentum=MOMENTUM)),
-                                    (EPOCHS_STAGE2, tf.optimizers.SGD(learning_rate=LR_STAGE2, momentum=MOMENTUM)),
-                                    (EPOCHS_STAGE3, tf.optimizers.SGD(learning_rate=LR_STAGE3, momentum=MOMENTUM))]:'''
-        for epochs, optimizer in [(EPOCHS_STAGE1, tf.optimizers.Adam(learning_rate=LR_STAGE1)),
-                                    (EPOCHS_STAGE2, tf.optimizers.Adam(learning_rate=LR_STAGE2)),
-                                    (EPOCHS_STAGE3, tf.optimizers.Adam(learning_rate=LR_STAGE3))]:
+        for epochs, optimizer in optimizers:
 
             for epoch in range(epochs):
 
+                progbar_output = tf.keras.utils.Progbar(TRAIN_BATCH_CNT)
                 tf.print(f"\nEpoch {epoch} (stage {epoch_stage}):")
+
+                # loss stats variables
 
                 sum_loss = 0
                 sum_loss_noobj = 0
@@ -288,8 +344,17 @@ class Network:
                 sum_loss_xy = 0
                 sum_loss_wh = 0
 
+                val_loss = 0
+                val_loss_noobj = 0
+                val_loss_obj = 0
+                val_loss_cl = 0
+                val_loss_xy = 0
+                val_loss_wh = 0
+
+                # train loop
+
                 batch_idx = 0
-                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_train_data(TRAIN_BATCH_SIZE):
+                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_data(TRAIN_BATCH_SIZE, "train"):
 
                     with tf.GradientTape() as tape:
                     
@@ -318,6 +383,7 @@ class Network:
 
                     batch_idx += 1
                     progbar_output.update(batch_idx)
+
                     sum_loss += loss_value
                     sum_loss_noobj += noobj
                     sum_loss_obj += obj
@@ -325,56 +391,41 @@ class Network:
                     sum_loss_xy += xy
                     sum_loss_wh += wh
 
-                    # FIXME
-                    break
+                # validation loop
 
-                tf.print(f"\nLoss value: {floor((sum_loss / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
-                loss_stats.append(floor((sum_loss / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-                loss_stats_noobj.append(floor((sum_loss_noobj / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-                loss_stats_obj.append(floor((sum_loss_obj / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-                loss_stats_cl.append(floor((sum_loss_cl / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-                loss_stats_xy.append(floor((sum_loss_xy / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-                loss_stats_wh.append(floor((sum_loss_wh / BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-                
+                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_data(VALIDATION_BATCH_SIZE, "validation"):
+                    
+                    out_s1, out_s2, out_s3 = self.full_network(imgs, training=False)
+
+                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
+                    val_loss += loss_value_
+                    val_loss_noobj += noobj_
+                    val_loss_obj += obj_
+                    val_loss_cl += cl_
+                    val_loss_xy += xy_
+                    val_loss_wh += wh_
+
+                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
+                    val_loss += loss_value_
+                    val_loss_noobj += noobj_
+                    val_loss_obj += obj_
+                    val_loss_cl += cl_
+                    val_loss_xy += xy_
+                    val_loss_wh += wh_
+                    
+                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
+                    val_loss += loss_value_
+                    val_loss_noobj += noobj_
+                    val_loss_obj += obj_
+                    val_loss_cl += cl_
+                    val_loss_xy += xy_
+                    val_loss_wh += wh_
+
+                _log_show_losses()
+
             epoch_stage += 1
 
-        loss_dump = [loss_stats, loss_stats_noobj, loss_stats_obj, loss_stats_cl, loss_stats_xy, loss_stats_wh]
-        with open("loss_stats_dump.bin", "wb+") as fd:
-            pickle.dump(loss_dump, fd)
-
-        fig, ax = plt.subplots(3, 2)
-        
-        ax[0][0].plot([idx for idx in range(len(loss_stats))],
-                        loss_stats)
-        ax[0][0].grid(True)
-        ax[0][0].set_title("total loss")
-
-        ax[0][1].plot([idx for idx in range(len(loss_stats))],
-                        loss_stats_noobj)
-        ax[0][1].grid(True)
-        ax[0][1].set_title("noobj")
-
-        ax[1][0].plot([idx for idx in range(len(loss_stats))],
-                        loss_stats_obj)
-        ax[1][0].grid(True)
-        ax[1][0].set_title("obj")
-
-        ax[1][1].plot([idx for idx in range(len(loss_stats))],
-                        loss_stats_cl)
-        ax[1][1].grid(True)
-        ax[1][1].set_title("cl")
-
-        ax[2][0].plot([idx for idx in range(len(loss_stats))],
-                        loss_stats_xy)
-        ax[2][0].grid(True)
-        ax[2][0].set_title("xy")
-
-        ax[2][1].plot([idx for idx in range(len(loss_stats))],
-                        loss_stats_wh)
-        ax[2][1].grid(True)
-        ax[2][1].set_title("wh")
-
-        plt.show()
+        _plot_losses()
 
     def show_stats(self):
         self.full_network.summary()

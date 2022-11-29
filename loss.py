@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from utils import *
 
-#@tf.function
+@tf.function
 def yolov3_loss_perscale(output, bool_mask, target_mask):
     '''
         raw output: B x S x S x (A * (C + 5))
@@ -57,13 +57,13 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
     wh_loss = tf.math.reduce_sum(wh_loss)
     coord_loss = COORD_COEF * (xy_loss + wh_loss)
     
-    print(f"no obj loss = {no_object_loss}")
+    '''print(f"no obj loss = {no_object_loss}")
     print(f"obj loss = {object_loss}")
     print(f"classif loss = {classification_loss}")
     print(f"xy loss = {xy_loss}")
     print(f"wh loss = {wh_loss}")
     print(f"coord loss = {coord_loss}")
-    print("\n")
+    print("\n")'''
     
     total_loss = no_object_loss + object_loss + classification_loss + coord_loss
     return total_loss, no_object_loss, object_loss, classification_loss, xy_loss, wh_loss

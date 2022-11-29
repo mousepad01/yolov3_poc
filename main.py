@@ -20,14 +20,14 @@ def tests():
         output_from_mask = [None for _ in range(SCALE_CNT)]
         for d in range(SCALE_CNT):
 
-            B, S, A = data_manager.target_anchor_masks[d].shape[0], data_manager.target_anchor_masks[d].shape[1], data_manager.target_anchor_masks[d].shape[3]
-            #sigmoid_tx_ty = data_manager.target_anchor_masks[d][..., 0:2]
-            #tx_ty = tf.math.log(sigmoid_tx_ty / (1 - sigmoid_tx_ty)) * data_manager.bool_anchor_masks[d]
-            tx_ty = data_manager.target_anchor_masks[d][..., 0:2] * data_manager.bool_anchor_masks[d]
-            tw_th = data_manager.target_anchor_masks[d][..., 2:4] * data_manager.bool_anchor_masks[d]
-            to = tf.cast(tf.fill((B, S, S, A, 1), value=10.0), dtype=tf.float32) * data_manager.bool_anchor_masks[d] + \
-                    tf.cast(tf.fill((B, S, S, A, 1), value=-10.0), dtype=tf.float32) * (1 - data_manager.bool_anchor_masks[d])
-            probabilities = data_manager.target_anchor_masks[d][..., 4:] * 10
+            B, S, A = data_manager.target_anchor_masks["train"][d].shape[0], data_manager.target_anchor_masks["train"][d].shape[1], data_manager.target_anchor_masks["train"][d].shape[3]
+            #sigmoid_tx_ty = data_manager.target_anchor_masks["train"][d][..., 0:2]
+            #tx_ty = tf.math.log(sigmoid_tx_ty / (1 - sigmoid_tx_ty)) * data_manager.bool_anchor_masks["train"][d]
+            tx_ty = data_manager.target_anchor_masks["train"][d][..., 0:2] * data_manager.bool_anchor_masks["train"][d]
+            tw_th = data_manager.target_anchor_masks["train"][d][..., 2:4] * data_manager.bool_anchor_masks["train"][d]
+            to = tf.cast(tf.fill((B, S, S, A, 1), value=10.0), dtype=tf.float32) * data_manager.bool_anchor_masks["train"][d] + \
+                    tf.cast(tf.fill((B, S, S, A, 1), value=-10.0), dtype=tf.float32) * (1 - data_manager.bool_anchor_masks["train"][d])
+            probabilities = data_manager.target_anchor_masks["train"][d][..., 4:] * 10
             output_from_mask[d] = tf.concat([tx_ty, tw_th, to, probabilities], axis=-1) 
 
         anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
@@ -66,7 +66,7 @@ def tests():
 
         model.train()
 
-        for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_train_data(1):
+        for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(1, "validation"):
 
             out_scale1, out_scale2, out_scale3 = model.full_network(img)
 
@@ -106,7 +106,7 @@ def tests():
 
     def _test_cache():
 
-        data_manager = DataManager(train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH, cache_key="0")
+        data_manager = DataManager(cache_key="base")
         data_manager.load_info()
         data_manager.determine_anchors()
         data_manager.assign_anchors_to_objects()
@@ -128,7 +128,7 @@ def tests():
 
         model.train()
 
-        for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_train_data(1):
+        for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(1, "validation"):
 
             out_scale1, out_scale2, out_scale3 = model.full_network(img)
 
