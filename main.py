@@ -7,7 +7,10 @@ from anchor_kmeans import *
 from model import *
 
 print("NOTE: this implementation relies on the fact that dictionaries are ORDERED. yielding keys in a nedeterministic order breaks everything")
+
 print("TODO: ADD TEST DATA!!!!!!!!!!")
+print("FIXME: RE-INTRODUCE BATCH NORM WHEN FINISHING TESTS WITH 1 IMAGE")
+print("FIXME: ADD OPTIMIZER SAVING")
 
 def tests():
 
@@ -148,10 +151,10 @@ def tests():
 
             break
 
-    #_test_mask_encoding()
+    _test_mask_encoding()
     #_test_learning_one_img()
     #_plot_model_stats()
-    _test_cache()
+    #_test_cache()
     #_test_train()
     
 def main():

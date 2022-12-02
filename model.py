@@ -9,9 +9,6 @@ from loss import *
 from predictions import *
 from data_processing import *
 
-print("FIXME: RE-INTRODUCE BATCH NORM WHEN FINISHING TESTS WITH 1 IMAGE")
-print("TODO: ADD MODEL LOAD AND SAVE")
-
 class ConvLayer(tf.keras.layers.Layer):
 
     LEAKY_RELU_RATE = 0.1
@@ -66,6 +63,8 @@ class ResSequence(tf.keras.layers.Layer):
         return y
 
 class Network:
+
+    MODELS_PATH = "./saved_models"
 
     def __init__(self, data_manager):
 
@@ -454,3 +453,21 @@ class Network:
             output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
 
             show_prediction(np.array(img[0]), output_xy_min, output_xy_max, output_class, output_class_maxp, self.data_manager.onehot_to_name)
+
+    # FIXME add optimizers
+    def load_model(self, name):
+        
+        print("Loading model...")
+        self.full_network = tf.keras.models.load_model(f"{Network.MODELS_PATH}/{name}", custom_objects={
+                                                                                                        "ConvLayer": ConvLayer,
+                                                                                                        "ResBlock": ResBlock, 
+                                                                                                        "ResSequence": ResSequence
+                                                                                                        }
+                                                        )
+
+
+    # FIXME add optimizers
+    def save_model(self, name):
+
+        print("Saving model...")
+        tf.keras.models.save_model(self.full_network, f"{Network.MODELS_PATH}/{name}", overwrite=False)
