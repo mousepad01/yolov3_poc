@@ -9,6 +9,12 @@ DATA_LOAD_BATCH_SIZE = 1
     batch size just for loading
 '''
 
+GT_LOAD_BATCH_SIZE = 1024
+'''
+    batch size just for loading ground truth (bool masks, target masks)
+'''
+assert(GT_LOAD_BATCH_SIZE % DATA_LOAD_BATCH_SIZE == 0)
+
 IMG_SIZE = (416, 416)
 '''
     fixed image input size

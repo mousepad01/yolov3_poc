@@ -465,7 +465,6 @@ class Network:
                                                                                                         }
                                                         )
 
-
     # FIXME add optimizers
     def save_model(self, name):
 

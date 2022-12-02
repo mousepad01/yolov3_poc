@@ -24,16 +24,18 @@ class DataManager:
     VALIDATION_INFO_PATH = "./data/annotations/instances_val2017.json"
 
     CACHE_PATH = "./cache_entries/"
+    FAKE_CACHE_KEY = "tmp_gt"
 
     def __init__(self, train_data_path=TRAIN_DATA_PATH,
                         train_info_path=TRAIN_INFO_PATH,
                         validation_data_path=VALIDATION_DATA_PATH,
                         validation_info_path=VALIDATION_INFO_PATH,
 
-                        data_load_batch_size=DATA_LOAD_BATCH_SIZE,
                         img_size=IMG_SIZE,
                         cache_key=None,
                     ):
+
+        assert(cache_key != DataManager.FAKE_CACHE_KEY)
         
         self.data_path = {
                             "train": train_data_path,
@@ -85,29 +87,6 @@ class DataManager:
             * cacheable
         '''
 
-        self.bool_anchor_masks = {
-                                        "train": [[] for _ in range(SCALE_CNT)],
-                                        "validation": [[] for _ in range(SCALE_CNT)]
-                                    }
-        '''
-            for each purpose,
-                for each scale,
-                    B x S[scale] x S[scale] x A x 1     - whether that anchor is responsible for an object or not
-            * cacheable
-        '''
-        self.target_anchor_masks = {
-                                        "train": [[] for _ in range(SCALE_CNT)],
-                                        "validation": [[] for _ in range(SCALE_CNT)]
-                                    }
-        '''
-            for each purpose,
-                for each scale,
-                    B x S[scale] x S[scale] x A x 5     - regression targets and the class given by its one_hot index (but NOT one_hot encoded)            
-            * cacheable
-        '''
-
-        self.DATA_LOAD_BATCH_SIZE = data_load_batch_size
-
         self.IMG_SIZE = img_size
 
         self.cache_key = cache_key
@@ -149,6 +128,7 @@ class DataManager:
     def load_images(self, purpose):
         '''
             generator, for lazy loading
+            loads image in batches
             purpose: "train" | "validation"
         '''
         
@@ -164,7 +144,7 @@ class DataManager:
 
             current_loaded.append(img)
 
-            if len(current_loaded) == self.DATA_LOAD_BATCH_SIZE:
+            if len(current_loaded) == DATA_LOAD_BATCH_SIZE:
 
                 current_loaded = tf.convert_to_tensor(current_loaded)
                 yield current_loaded
@@ -176,39 +156,94 @@ class DataManager:
             current_loaded = tf.convert_to_tensor(current_loaded)
             yield current_loaded
 
+    def load_gt(self, purpose):
+        '''
+            loads ground truth for each image batch
+        '''
+
+        if self.cache_key is None:
+            cache_key = DataManager.FAKE_CACHE_KEY
+        else:
+            cache_key = self.cache_key
+
+        IMG_CNT = len(self.imgs[purpose].keys())
+        GT_BATCH_CNT = IMG_CNT // GT_LOAD_BATCH_SIZE
+
+        incomplete = ((IMG_CNT % GT_LOAD_BATCH_SIZE) > 0)
+
+        DATA_BATCH_PER_GT_BATCH = GT_LOAD_BATCH_SIZE // DATA_LOAD_BATCH_SIZE
+
+        # declare outside loop in case total image count < GT_LOAD_BATCH_SIZE
+        slice_idx = 0
+        gt_batch_idx = 0
+
+        for gt_batch_idx in range(GT_BATCH_CNT):
+
+            with open(f"{self.CACHE_PATH}/{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                raw_cache = cache_f.read()
+            bool_masks = pickle.loads(raw_cache)
+
+            with open(f"{self.CACHE_PATH}/{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                raw_cache = cache_f.read()
+            target_masks = pickle.loads(raw_cache)
+
+            for local_slice_idx in range(DATA_BATCH_PER_GT_BATCH):
+                slice_idx = (gt_batch_idx * DATA_BATCH_PER_GT_BATCH + local_slice_idx) * DATA_LOAD_BATCH_SIZE
+
+                yield bool_masks[0][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                        target_masks[0][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                        bool_masks[1][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                        target_masks[1][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                        bool_masks[2][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                        target_masks[2][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE]
+
+        if incomplete is True:
+
+            with open(f"{self.CACHE_PATH}/{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                raw_cache = cache_f.read()
+            bool_masks = pickle.loads(raw_cache)
+
+            with open(f"{self.CACHE_PATH}/{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                raw_cache = cache_f.read()
+            target_masks = pickle.loads(raw_cache)
+
+            rem = IMG_CNT % GT_LOAD_BATCH_SIZE
+
+            slice_idx = GT_BATCH_CNT * DATA_BATCH_PER_GT_BATCH
+            while True:
+
+                if slice_idx + DATA_LOAD_BATCH_SIZE >= rem + GT_BATCH_CNT * DATA_BATCH_PER_GT_BATCH:
+                    yield bool_masks[0][slice_idx:], \
+                            target_masks[0][slice_idx:], \
+                            bool_masks[1][slice_idx:], \
+                            target_masks[1][slice_idx:], \
+                            bool_masks[2][slice_idx:], \
+                            target_masks[2][slice_idx:]
+                    break
+
+                else:
+                    yield bool_masks[0][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                            target_masks[0][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                            bool_masks[1][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                            target_masks[1][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                            bool_masks[2][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                            target_masks[2][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE]
+
+                    slice_idx += DATA_LOAD_BATCH_SIZE
+
     def load_data(self, batch_size, purpose):
 
-        if DATA_LOAD_BATCH_SIZE % batch_size != 0:
-            print("Data load batch size not a multiple of train batch size")
+        # TODO remove in the future for better generalization
+        if DATA_LOAD_BATCH_SIZE != batch_size:
+            print("Data load batch size must (currently) be equal with the train batch size")
             quit()
 
-        slice_idx = 0
+        gt_generator = self.load_gt(purpose)
         for imgs in self.load_images(purpose):
 
-            bool_mask_size1 = self.bool_anchor_masks[purpose][0][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
-            target_mask_size1 = self.target_anchor_masks[purpose][0][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
-
-            bool_mask_size2 = self.bool_anchor_masks[purpose][1][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
-            target_mask_size2 = self.target_anchor_masks[purpose][1][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
-
-            bool_mask_size3 = self.bool_anchor_masks[purpose][2][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
-            target_mask_size3 = self.target_anchor_masks[purpose][2][slice_idx * DATA_LOAD_BATCH_SIZE: (slice_idx + 1) * DATA_LOAD_BATCH_SIZE]
+            bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3 = next(gt_generator)
             
             yield tf.cast(imgs, tf.float32) / 255.0, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3
-                    
-            slice_idx += 1
-
-    def load_data_serial(self, purpose):
-        
-        idx = 0
-        for img_id in self.imgs[purpose].keys():
-
-            img = cv.imread(self.data_path[purpose] + self.imgs[purpose][img_id]["filename"])
-            img = self.resize_with_pad(img)
-
-            yield tf.cast(img, tf.float32) / 255.0, self.bool_anchor_masks[purpose][idx: idx + 1], self.target_anchor_masks[purpose][idx: idx + 1]
-
-            idx += 1
 
     def load_info(self):
         '''
@@ -358,21 +393,36 @@ class DataManager:
 
             try:
 
-                with open(f"{self.CACHE_PATH}/{self.cache_key}_bool_masks.bin", "rb") as cache_f:
-                    raw_cache = cache_f.read()
+                for purpose in ["train", "validation"]:
+                    
+                    IMG_CNT = len(self.imgs[purpose].keys())
+                    GT_BATCH_CNT = IMG_CNT // GT_LOAD_BATCH_SIZE
+                    if IMG_CNT % GT_LOAD_BATCH_SIZE > 0:
+                        GT_BATCH_CNT += 1
 
-                self.bool_anchor_masks = pickle.loads(raw_cache)
+                    for gt_batch_idx in range(GT_BATCH_CNT):
 
-                with open(f"{self.CACHE_PATH}/{self.cache_key}_target_masks.bin", "rb") as cache_f:
-                    raw_cache = cache_f.read()
+                        with open(f"{self.CACHE_PATH}/{self.cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                            pass
 
-                self.target_anchor_masks = pickle.loads(raw_cache)
+                        with open(f"{self.CACHE_PATH}/{self.cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                            pass
 
-                print("Cache found. Ground truth masks loaded")
+                print("Cache found for ground truth masks. It will be loaded when needed")
                 return
 
             except FileNotFoundError:
                 print("Cache not found. Operations will be fully executed and a new cache will be created")
+
+        '''
+            if the cache key is none, these values will not be stored for another round
+            still, they need to (at least temporarily) reside on the disk
+            so, we create a fake cache under FAKE_CACHE_KEY
+        '''
+        if self.cache_key is None:
+            cache_key = DataManager.FAKE_CACHE_KEY
+        else:
+            cache_key = self.cache_key
 
         def _iou(anchor, w, h):
             
@@ -384,23 +434,43 @@ class DataManager:
 
             return intersection / union
 
-        __idx = 0
+        def _store_gt(bool_anchor_masks, target_anchor_masks, purpose, gt_batch_idx):
+
+            for d in range(SCALE_CNT):
+
+                bool_anchor_masks[d] = tf.convert_to_tensor(bool_anchor_masks[d], dtype=tf.float32)
+                target_anchor_masks[d] = tf.convert_to_tensor(target_anchor_masks[d], dtype=tf.float32)
+
+            new_cache = pickle.dumps(bool_anchor_masks)
+
+            with open(f"{self.CACHE_PATH}/{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
+                cache_f.write(new_cache)
+
+            new_cache = pickle.dumps(target_anchor_masks)
+
+            with open(f"{self.CACHE_PATH}/{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
+                cache_f.write(new_cache)
 
         for purpose in ["train", "validation"]:
+            
+            bool_anchor_masks = [[] for _ in range(SCALE_CNT)]     
+            '''
+                    for each scale,
+                        B x S[scale] x S[scale] x A x 1     - whether that anchor is responsible for an object or not
+            '''
+            target_anchor_masks = [[] for _ in range(SCALE_CNT)]
+            '''
+                    for each scale,
+                        B x S[scale] x S[scale] x A x 5     - regression targets and the class given by its one_hot index (but NOT one_hot encoded)            
+            '''
+
+            gt_batch_idx = 0
             for img_id in self.imgs[purpose].keys():
-
-                if __idx > 8:
-                    break
-
-                __idx += 1
 
                 bool_mask = []
                 target_mask = []
 
                 for d in range(SCALE_CNT):
-
-                    #bool_mask.append([[[[0] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])])
-                    #target_mask.append([[[[0 for _ in range(4 + len(self.category_onehot_to_id))] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])])
 
                     bool_mask.append(np.array([[[[0] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])], dtype=np.float64))
                     target_mask.append(np.array([[[[0 for _ in range(4 + len(self.category_onehot_to_id))] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])], dtype=np.float64))
@@ -451,22 +521,16 @@ class DataManager:
 
                 for d in range(SCALE_CNT):
 
-                    self.bool_anchor_masks[purpose][d].append(tf.convert_to_tensor(bool_mask[d], dtype=tf.float32))
-                    self.target_anchor_masks[purpose][d].append(tf.convert_to_tensor(target_mask[d], dtype=tf.float32))
+                    bool_anchor_masks[d].append(tf.convert_to_tensor(bool_mask[d], dtype=tf.float32))
+                    target_anchor_masks[d].append(tf.convert_to_tensor(target_mask[d], dtype=tf.float32))
 
-            for d in range(SCALE_CNT):
+                if len(bool_anchor_masks[0]) == GT_LOAD_BATCH_SIZE:
 
-                self.bool_anchor_masks[purpose][d] = tf.convert_to_tensor(self.bool_anchor_masks[purpose][d], dtype=tf.float32)
-                self.target_anchor_masks[purpose][d] = tf.convert_to_tensor(self.target_anchor_masks[purpose][d], dtype=tf.float32)
+                    _store_gt(bool_anchor_masks, target_anchor_masks, purpose, gt_batch_idx)
 
-        if self.cache_key is not None:
+                    bool_anchor_masks = [[] for _ in range(SCALE_CNT)]
+                    target_anchor_masks = [[] for _ in range(SCALE_CNT)]
+                    gt_batch_idx += 1
 
-            new_cache = pickle.dumps(self.bool_anchor_masks)
-
-            with open(f"{self.CACHE_PATH}/{self.cache_key}_bool_masks.bin", "wb+") as cache_f:
-                cache_f.write(new_cache)
-
-            new_cache = pickle.dumps(self.target_anchor_masks)
-
-            with open(f"{self.CACHE_PATH}/{self.cache_key}_target_masks.bin", "wb+") as cache_f:
-                cache_f.write(new_cache)
+            if len(bool_anchor_masks[0]) > 0:
+                _store_gt(bool_anchor_masks, target_anchor_masks, purpose, gt_batch_idx)
