@@ -18,7 +18,8 @@ def tests():
 
     def _test_mask_encoding():
 
-        data_manager = DataManager(cache_key="fsttest", train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH)
+        #data_manager = DataManager(cache_key="fsttest", train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH)
+        data_manager = DataManager(cache_key="base")
         data_manager.load_info()
         data_manager.determine_anchors()
         data_manager.assign_anchors_to_objects()
