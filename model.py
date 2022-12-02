@@ -10,8 +10,7 @@ from predictions import *
 from data_processing import *
 
 print("FIXME: RE-INTRODUCE BATCH NORM WHEN FINISHING TESTS WITH 1 IMAGE")
-print("FIXME: train after done testing code")
-print("FIXME: FIX NO OBJ LOSS FACTOR")
+print("TODO: ADD MODEL LOAD AND SAVE")
 
 class ConvLayer(tf.keras.layers.Layer):
 
