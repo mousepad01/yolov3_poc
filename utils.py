@@ -4,7 +4,7 @@ import cv2 as cv
     Various constants needed in whatever places
 '''
 
-DATA_LOAD_BATCH_SIZE = 1
+DATA_LOAD_BATCH_SIZE = 1024
 '''
     batch size just for loading
 '''

@@ -174,10 +174,11 @@ class DataManager:
         DATA_BATCH_PER_GT_BATCH = GT_LOAD_BATCH_SIZE // DATA_LOAD_BATCH_SIZE
 
         # declare outside loop in case total image count < GT_LOAD_BATCH_SIZE
-        slice_idx = 0
         gt_batch_idx = 0
 
         for gt_batch_idx in range(GT_BATCH_CNT):
+
+            print(f"gt b idx {gt_batch_idx}")
 
             with open(f"{self.CACHE_PATH}/{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
@@ -188,7 +189,7 @@ class DataManager:
             target_masks = pickle.loads(raw_cache)
 
             for local_slice_idx in range(DATA_BATCH_PER_GT_BATCH):
-                slice_idx = (gt_batch_idx * DATA_BATCH_PER_GT_BATCH + local_slice_idx) * DATA_LOAD_BATCH_SIZE
+                slice_idx = local_slice_idx * DATA_LOAD_BATCH_SIZE
 
                 yield bool_masks[0][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
                         target_masks[0][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
@@ -198,6 +199,10 @@ class DataManager:
                         target_masks[2][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE]
 
         if incomplete is True:
+
+            gt_batch_idx += 1
+
+            print(f"(rem) gt b idx {gt_batch_idx}")
 
             with open(f"{self.CACHE_PATH}/{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
@@ -209,10 +214,10 @@ class DataManager:
 
             rem = IMG_CNT % GT_LOAD_BATCH_SIZE
 
-            slice_idx = GT_BATCH_CNT * DATA_BATCH_PER_GT_BATCH
+            slice_idx = 0
             while True:
 
-                if slice_idx + DATA_LOAD_BATCH_SIZE >= rem + GT_BATCH_CNT * DATA_BATCH_PER_GT_BATCH:
+                if slice_idx + DATA_LOAD_BATCH_SIZE >= rem:
                     yield bool_masks[0][slice_idx:], \
                             target_masks[0][slice_idx:], \
                             bool_masks[1][slice_idx:], \

@@ -70,6 +70,8 @@ def tests():
                                 data_manager.onehot_to_name,
                                 data_manager.imgs["train"][img_id]["objs"])
 
+                break
+
     def _test_learning_one_img():
 
         # BEFORE RUNNING: 
