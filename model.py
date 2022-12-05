@@ -147,7 +147,7 @@ class Network:
 
         tf.print(f"Model with cache key {self.cache_key} (idx {self.cache_idx}) has been found and loaded, along with its optimizer and the last training epoch.")
 
-    def _compile_and_save_model(self, optimizer: tf.keras.optimizers.Optimizer, last_epoch):
+    def _save_model(self, last_epoch):
         '''
             internal method for saving a model, along with its optimizer
             the model is saved automatically (if cache is used):
@@ -160,8 +160,7 @@ class Network:
         with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.store_cache_idx}_next_epoch", "w+") as last_epoch_f:
             last_epoch_f.write(f"{self.next_training_epoch}")
 
-        self.full_network.compile(optimizer=optimizer)
-        tf.keras.models.save_model(self.full_network, f"{MODEL_CACHE_PATH}{self.cache_key}_{self.store_cache_idx}_model", overwrite=True)
+        tf.keras.models.save_model(self.full_network, f"{MODEL_CACHE_PATH}{self.cache_key}_{self.store_cache_idx}_model", overwrite=True, include_optimizer=True)
 
         tf.print(f"Model with key {self.cache_key} (idx {self.cache_idx}) has been saved under the idx {self.store_cache_idx}.")
 
@@ -320,7 +319,8 @@ class Network:
             print("unknown backbone")
             quit()
         
-        self._compile_and_save_model(optimizer, 0)
+        self.full_network.compile(optimizer=optimizer)
+        self._save_model(0)
 
     # TODO use tf.data.Dataset
     def train(self, epochs):
@@ -552,12 +552,12 @@ class Network:
                 
                 assert(self.cache_key is not None)
                 if self.cache_idx != self.store_cache_idx:
-                    self._compile_and_save_model(self.full_network.optimizer, self.next_training_epoch)
+                    self._save_model(self.next_training_epoch)
 
             else:
                 tf.print(f"Training for model with key {self.cache_key} (idx {self.cache_idx}) is done ({epochs} epochs).")
                 if self.cache_key is not None:
-                    self._compile_and_save_model(self.full_network.optimizer, epoch)
+                    self._save_model(epoch)
 
             _plot_losses()
         
@@ -569,7 +569,7 @@ class Network:
                 tf.print("Training interrupted; there is no cache key so the intermediary model will not be saved.")
 
             if self.cache_key is not None:
-                self._compile_and_save_model(self.full_network.optimizer, epoch)
+                self._save_model(epoch)
 
     def show_architecture_stats(self):
         self.full_network.summary()
