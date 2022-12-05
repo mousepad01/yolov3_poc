@@ -4,6 +4,16 @@ import cv2 as cv
     Various constants needed in whatever places
 '''
 
+DATA_CACHE_PATH = "./cache_entries/"
+'''
+    (relative) path for storing data (anchors, gt masks) caches
+'''
+
+MODEL_CACHE_PATH = "./saved_models/"
+'''
+    (relative) path for storing saved models
+'''
+
 # FIXME
 DATA_LOAD_BATCH_SIZE = 1
 '''

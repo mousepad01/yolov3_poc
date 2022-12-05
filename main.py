@@ -89,17 +89,16 @@ def tests():
         
         def _lr_sched(epoch, lr):
 
-            if epoch < 4:
+            if epoch < 800:
                 return 1e-4
 
-            elif epoch < 8:
+            elif epoch < 1600:
                 return 1e-5
 
             else:
                 return 1e-6
 
-        #model.train([(1, tf.optimizers.Adam(learning_rate=1e-4))])
-        model.train(12, optimizer, _lr_sched)
+        model.train(1700, optimizer, _lr_sched)
 
         for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(1, "train"):
 

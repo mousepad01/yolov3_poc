@@ -3,6 +3,7 @@ import numpy as np
 import tensorflow as tf
 import cv2 as cv
 import pickle
+from random import randint
 
 from utils import *
 from loss import *
@@ -64,24 +65,51 @@ class ResSequence(tf.keras.layers.Layer):
 
 class Network:
 
-    MODELS_PATH = "./saved_models"
-
-    def __init__(self, data_manager):
+    def __init__(self, data_manager, use_cache=True, cache_idx=None, store_cache_idx=None):
 
         self.data_manager: DataManager = data_manager
         '''
             contains data info and all that stuff
         '''
+        
+        if use_cache:
+
+            assert(self.data_manager.cache_key is not None)
+            assert(cache_idx is not None)
+
+            self.cache_key = self.data_manager.cache_key
+            '''
+                cache key used for saving/loading a model
+            '''
+
+            self.cache_idx = cache_idx
+            '''
+                to be able to use the same data cache for multiple model savings, a cache "subkey" is also used
+                * NOTE: if source_cache_idx is not specified, it is used for both loading and storing
+            '''
+
+            self.store_cache_idx = store_cache_idx
+            '''
+                used for saving the model
+                * if not given, it is the same as cache_idx and, if it exists, it overwrites the old entry
+            '''
+            if store_cache_idx is None:
+                self.store_cache_idx = self.cache_idx
+
+            self.next_training_epoch = 0
+            '''
+                the last training epoch that was executing when the model had been saved
+            '''
+
+        else:
+
+            self.cache_key = None
+            self.cache_idx = None
+            self.next_training_epoch = 0
 
         self.backbone: tf.keras.Model = None
         '''
-            backbone for feature extraction (Darknet-53 ???)
-        '''
-
-        # self.classification_input_layer: tf.keras.layer = None
-        '''
-            (UNUSED)
-            256 x 256 x 3
+            backbone for feature extraction
         '''
 
         self.input_layer: tf.keras.layer = None
@@ -89,18 +117,83 @@ class Network:
             416 x 416 x 3
         '''
 
-        # self.backbone_classification_head: tf.keras.Model = None
-        '''
-            (UNUSED)
-            head for classification task
-        '''
-
         self.full_network: tf.keras.Model = None
         '''
             includes the full network for object detection (so, everything except backbone classification head)
         '''
 
-    def build_components(self, anchors_per_cell=ANCHOR_PERSCALE_CNT, class_count=10, backbone="darknet-53"):
+        self.lr_scheduler: function = None
+        '''
+            schedule the learning rate during training
+            * NOTE: this function is not saved when the training is interrupred; it is best this function is defined stateless
+        '''
+
+    def _load_model(self):
+        '''
+            internal method for loading:
+            * the saved model
+            * its optimizer
+            * the last executed epoch
+        '''
+
+        self.full_network = tf.keras.models.load_model(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_model", custom_objects={
+                                                                                                                                        "ConvLayer": ConvLayer,
+                                                                                                                                        "ResBlock": ResBlock, 
+                                                                                                                                        "ResSequence": ResSequence
+                                                                                                                                        }
+                                                        )
+
+        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_next_epoch", "r") as last_epoch_f:
+            self.next_training_epoch = int(last_epoch_f.read())
+
+        tf.print(f"Model with cache key {self.cache_key} (idx {self.cache_idx}) has been found and loaded, along with its optimizer and the last training epoch.")
+
+    def _compile_and_save_model(self, optimizer: tf.keras.optimizers.Optimizer, last_epoch):
+        '''
+            internal method for saving a model, along with its optimizer
+            the model is saved automatically (if use_cache is True):
+            * in build_components(), if the model is new
+            * in train, at the end
+            * in train, if it is stopped with Ctrl-C
+        '''
+        
+        self.next_training_epoch = last_epoch
+        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.store_cache_idx}_next_epoch", "w+") as last_epoch_f:
+            last_epoch_f.write(f"{self.next_training_epoch}")
+
+        self.full_network.compile(optimizer=optimizer)
+        tf.keras.models.save_model(self.full_network, f"{MODEL_CACHE_PATH}{self.cache_key}_{self.store_cache_idx}_model", overwrite=True)
+
+        tf.print(f"Model with key {self.cache_key} (idx {self.cache_idx}) has been saved under the idx {self.store_cache_idx}.")
+
+    def build_components(self, optimizer: tf.keras.optimizers.Optimizer, lr_scheduler=lambda epoch, lr: lr, backbone="darknet-53"):
+        ''' 
+            if there is already a saved model and "use_cache" option is used, it loads that model
+            if not, it builds the model  using the given parameters
+            * optimizer: to use during training (ignored if a saved model is loaded)
+            * lr_scheduler(current epoch, current lr) => updated lr
+            * backbone: string with the name of the backbone to use (ignored if a saved model is loaded)
+        '''
+
+        self.lr_scheduler = lr_scheduler
+
+        if self.cache_key is not None:
+
+            try:
+                
+                # check whether the cache already exists
+                with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_next_epoch", "r") as last_epoch_f:
+                    pass
+
+                self._load_model()
+                return
+                
+            except FileNotFoundError:
+                pass
+
+        tf.print("Building a new model...")
+
+        CLASS_COUNT = len(self.data_manager.used_categories)
 
         if backbone == "darknet-53":
         
@@ -129,7 +222,7 @@ class Network:
             conv_scale1_5 = ConvLayer(512, 1)(conv_scale1_4)
 
             conv_scale1_6 = ConvLayer(1024, 3)(conv_scale1_5)
-            output_scale1 = ConvLayer(anchors_per_cell * (4 + 1 + class_count), 1)(conv_scale1_6)
+            output_scale1 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1)(conv_scale1_6)
 
             # output for scale 2
 
@@ -144,7 +237,7 @@ class Network:
             conv_scale2_5 = ConvLayer(256, 1)(conv_scale2_4)
 
             conv_scale2_6 = ConvLayer(512, 3)(conv_scale2_5)
-            output_scale2 = ConvLayer(anchors_per_cell * (4 + 1 + class_count), 1)(conv_scale2_6)
+            output_scale2 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1)(conv_scale2_6)
 
             # output for scale 3
 
@@ -159,7 +252,7 @@ class Network:
             conv_scale3_5 = ConvLayer(128, 1)(conv_scale3_4)
 
             conv_scale3_6 = ConvLayer(256, 3)(conv_scale3_5)
-            output_scale3 = ConvLayer(anchors_per_cell * (4 + 1 + class_count), 1)(conv_scale3_6)
+            output_scale3 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1)(conv_scale3_6)
 
             self.full_network = tf.keras.Model(inputs=input_img, outputs=[output_scale1, output_scale2, output_scale3])
 
@@ -190,7 +283,7 @@ class Network:
             conv_scale1_5 = ConvLayer(256, 1)(conv_scale1_2)
 
             conv_scale1_6 = ConvLayer(512, 3)(conv_scale1_5)
-            output_scale1 = ConvLayer(anchors_per_cell * (4 + 1 + class_count), 1)(conv_scale1_6)
+            output_scale1 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1)(conv_scale1_6)
 
             # output for scale 2
 
@@ -205,7 +298,7 @@ class Network:
             conv_scale2_5 = ConvLayer(128, 1)(conv_scale2_2)
 
             conv_scale2_6 = ConvLayer(256, 3)(conv_scale2_5)
-            output_scale2 = ConvLayer(anchors_per_cell * (4 + 1 + class_count), 1)(conv_scale2_6)
+            output_scale2 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1)(conv_scale2_6)
 
             # output for scale 3
 
@@ -220,25 +313,25 @@ class Network:
             conv_scale3_5 = ConvLayer(64, 1)(conv_scale3_2)
 
             conv_scale3_6 = ConvLayer(128, 3)(conv_scale3_5)
-            output_scale3 = ConvLayer(anchors_per_cell * (4 + 1 + class_count), 1)(conv_scale3_6)
+            output_scale3 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1)(conv_scale3_6)
 
             self.full_network = tf.keras.Model(inputs=input_img, outputs=[output_scale1, output_scale2, output_scale3])
 
         else:
             print("unknown backbone")
             quit()
+        
+        self._compile_and_save_model(optimizer, next_epoch=0)
 
     # TODO use tf.data.Dataset
-    def train(self, epochs, optimizer: tf.keras.optimizers.Optimizer, lr_scheduler=lambda epoch, lr: lr):
+    def train(self, epochs):
         '''
-            * epochs: number of epochs
-            * optimizer
-            * lr_scheduler(current epoch, current lr) => updated lr
+            * epochs: number of total epochs (effective number of epochs executed: epochs - self.next_training_epoch + 1)
         '''
 
         if self.full_network is None:
-            print("network not yet initialized")
-            quit()
+            tf.print("Network not yet initialized")
+            return
 
         # FIXME
         # in the future, vary these parameters
@@ -330,130 +423,150 @@ class Network:
 
             plt.show()
 
-        for epoch in range(epochs):
-            
-            new_lr = lr_scheduler(epoch, optimizer.learning_rate)
-            optimizer.learning_rate = new_lr
+        try:
 
-            progbar_output = tf.keras.utils.Progbar(TRAIN_BATCH_CNT)
-            tf.print(f"\nEpoch {epoch} (lr {new_lr}):")
-
-            # loss stats variables
-
-            sum_loss = 0
-            sum_loss_noobj = 0
-            sum_loss_obj = 0
-            sum_loss_cl = 0
-            sum_loss_xy = 0
-            sum_loss_wh = 0
-
-            val_loss = 0
-            val_loss_noobj = 0
-            val_loss_obj = 0
-            val_loss_cl = 0
-            val_loss_xy = 0
-            val_loss_wh = 0
-
-            # train loop
-
-            batch_idx = 0
-            for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_data(TRAIN_BATCH_SIZE, "train"):
-
-                with tf.GradientTape() as tape:
+            for epoch in range(self.next_training_epoch, epochs, 1):
                 
-                    out_s1, out_s2, out_s3 = self.full_network(imgs, training=True)
+                new_lr = self.lr_scheduler(epoch, self.full_network.optimizer.learning_rate)
+                self.full_network.optimizer.learning_rate = new_lr
 
-                    loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
-                    print(f"total loss = {loss_value}")
-                    print(f"no obj loss = {noobj}")
-                    print(f"obj loss = {obj}")
-                    print(f"classif loss = {cl}")
-                    print(f"xy loss = {xy}")
-                    print(f"wh loss = {wh}")
-                    print("\n")
+                progbar_output = tf.keras.utils.Progbar(TRAIN_BATCH_CNT)
+                tf.print(f"\nEpoch {epoch} (lr {new_lr}):")
 
-                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
-                    print(f"total loss = {loss_value_}")
-                    print(f"no obj loss = {noobj_}")
-                    print(f"obj loss = {obj_}")
-                    print(f"classif loss = {cl_}")
-                    print(f"xy loss = {xy_}")
-                    print(f"wh loss = {wh_}")
-                    print("\n")
-                    loss_value += loss_value_
-                    noobj += noobj_
-                    obj += obj_
-                    cl += cl_
-                    xy += xy_
-                    wh += wh_
+                # loss stats variables
+
+                sum_loss = 0
+                sum_loss_noobj = 0
+                sum_loss_obj = 0
+                sum_loss_cl = 0
+                sum_loss_xy = 0
+                sum_loss_wh = 0
+
+                val_loss = 0
+                val_loss_noobj = 0
+                val_loss_obj = 0
+                val_loss_cl = 0
+                val_loss_xy = 0
+                val_loss_wh = 0
+
+                # train loop
+
+                batch_idx = 0
+                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_data(TRAIN_BATCH_SIZE, "train"):
+
+                    with tf.GradientTape() as tape:
                     
-                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
-                    print(f"total loss = {loss_value_}")
-                    print(f"no obj loss = {noobj_}")
-                    print(f"obj loss = {obj_}")
-                    print(f"classif loss = {cl_}")
-                    print(f"xy loss = {xy_}")
-                    print(f"wh loss = {wh_}")
-                    print("\n")
-                    loss_value += loss_value_
-                    noobj += noobj_
-                    obj += obj_
-                    cl += cl_
-                    xy += xy_
-                    wh += wh_
+                        out_s1, out_s2, out_s3 = self.full_network(imgs, training=True)
 
-                gradients = tape.gradient(loss_value, self.full_network.trainable_weights)
-                optimizer.apply_gradients(zip(gradients, self.full_network.trainable_weights))
+                        loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
+                        print(f"total loss = {loss_value}")
+                        print(f"no obj loss = {noobj}")
+                        print(f"obj loss = {obj}")
+                        print(f"classif loss = {cl}")
+                        print(f"xy loss = {xy}")
+                        print(f"wh loss = {wh}")
+                        print("\n")
 
-                batch_idx += 1
-                progbar_output.update(batch_idx)
+                        loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
+                        print(f"total loss = {loss_value_}")
+                        print(f"no obj loss = {noobj_}")
+                        print(f"obj loss = {obj_}")
+                        print(f"classif loss = {cl_}")
+                        print(f"xy loss = {xy_}")
+                        print(f"wh loss = {wh_}")
+                        print("\n")
+                        loss_value += loss_value_
+                        noobj += noobj_
+                        obj += obj_
+                        cl += cl_
+                        xy += xy_
+                        wh += wh_
+                        
+                        loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
+                        print(f"total loss = {loss_value_}")
+                        print(f"no obj loss = {noobj_}")
+                        print(f"obj loss = {obj_}")
+                        print(f"classif loss = {cl_}")
+                        print(f"xy loss = {xy_}")
+                        print(f"wh loss = {wh_}")
+                        print("\n")
+                        loss_value += loss_value_
+                        noobj += noobj_
+                        obj += obj_
+                        cl += cl_
+                        xy += xy_
+                        wh += wh_
 
-                sum_loss += loss_value
-                sum_loss_noobj += noobj
-                sum_loss_obj += obj
-                sum_loss_cl += cl
-                sum_loss_xy += xy
-                sum_loss_wh += wh
+                    gradients = tape.gradient(loss_value, self.full_network.trainable_weights)
+                    self.full_network.optimizer.apply_gradients(zip(gradients, self.full_network.trainable_weights))
+
+                    batch_idx += 1
+                    progbar_output.update(batch_idx)
+
+                    sum_loss += loss_value
+                    sum_loss_noobj += noobj
+                    sum_loss_obj += obj
+                    sum_loss_cl += cl
+                    sum_loss_xy += xy
+                    sum_loss_wh += wh
+
+                    # FIXME
+                    break
 
                 # FIXME
-                break
+                continue
 
-            # FIXME
-            continue
+                # validation loop
 
-            # validation loop
+                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_data(VALIDATION_BATCH_SIZE, "validation"):
+                    
+                    out_s1, out_s2, out_s3 = self.full_network(imgs, training=False)
 
-            for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_data(VALIDATION_BATCH_SIZE, "validation"):
-                
-                out_s1, out_s2, out_s3 = self.full_network(imgs, training=False)
+                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
+                    val_loss += loss_value_
+                    val_loss_noobj += noobj_
+                    val_loss_obj += obj_
+                    val_loss_cl += cl_
+                    val_loss_xy += xy_
+                    val_loss_wh += wh_
 
-                loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
-                val_loss += loss_value_
-                val_loss_noobj += noobj_
-                val_loss_obj += obj_
-                val_loss_cl += cl_
-                val_loss_xy += xy_
-                val_loss_wh += wh_
+                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
+                    val_loss += loss_value_
+                    val_loss_noobj += noobj_
+                    val_loss_obj += obj_
+                    val_loss_cl += cl_
+                    val_loss_xy += xy_
+                    val_loss_wh += wh_
+                    
+                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
+                    val_loss += loss_value_
+                    val_loss_noobj += noobj_
+                    val_loss_obj += obj_
+                    val_loss_cl += cl_
+                    val_loss_xy += xy_
+                    val_loss_wh += wh_
 
-                loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
-                val_loss += loss_value_
-                val_loss_noobj += noobj_
-                val_loss_obj += obj_
-                val_loss_cl += cl_
-                val_loss_xy += xy_
-                val_loss_wh += wh_
-                
-                loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
-                val_loss += loss_value_
-                val_loss_noobj += noobj_
-                val_loss_obj += obj_
-                val_loss_cl += cl_
-                val_loss_xy += xy_
-                val_loss_wh += wh_
+                _log_show_losses()
 
-            _log_show_losses()
+            if self.next_training_epoch >= epochs:
+                tf.print(f"Model with key {self.cache_key} (idx {self.cache_idx}) is already trained (at least) {epochs} epochs.")
 
-        #_plot_losses()
+            else:
+                tf.print(f"Training for model with key {self.cache_key} (idx {self.cache_idx}) is done ({epochs} epochs).")
+                if self.cache_key is not None:
+                    self._compile_and_save_model(self.full_network.optimizer, epoch)
+
+            _plot_losses()
+        
+        except KeyboardInterrupt:
+
+            if self.cache_key is not None:
+                tf.print(f"Training paused for model with key {self.cache_key} (idx {self.cache_idx}) at epoch {epoch}")
+            else:
+                tf.print("Training interrupted; there is no cache key so the intermediary model will not be saved.")
+
+            if self.cache_key is not None:
+                self._compile_and_save_model(self.full_network.optimizer, epoch)
 
     def show_architecture_stats(self):
         self.full_network.summary()
@@ -464,8 +577,8 @@ class Network:
     def predict(self, threshold=0.6):
         
         if self.full_network is None:
-            print("network not yet initialized")
-            quit()
+            tf.print("Network not yet initialized")
+            return
 
         for (img, _, _, _, _, _, _) in self.data_manager.load_data(1, "validation"):
 
@@ -483,20 +596,3 @@ class Network:
             output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
 
             show_prediction(np.array(img[0]), output_xy_min, output_xy_max, output_class, output_class_maxp, self.data_manager.onehot_to_name)
-
-    # FIXME add optimizers
-    def load_model(self, name):
-        
-        print("Loading model...")
-        self.full_network = tf.keras.models.load_model(f"{Network.MODELS_PATH}/{name}", custom_objects={
-                                                                                                        "ConvLayer": ConvLayer,
-                                                                                                        "ResBlock": ResBlock, 
-                                                                                                        "ResSequence": ResSequence
-                                                                                                        }
-                                                        )
-
-    # FIXME add optimizers
-    def save_model(self, name):
-
-        print("Saving model...")
-        tf.keras.models.save_model(self.full_network, f"{Network.MODELS_PATH}/{name}", overwrite=False)

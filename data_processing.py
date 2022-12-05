@@ -23,7 +23,6 @@ class DataManager:
     TRAIN_INFO_PATH = "./data/annotations/instances_train2017.json"
     VALIDATION_INFO_PATH = "./data/annotations/instances_val2017.json"
 
-    CACHE_PATH = "./cache_entries/"
     FAKE_CACHE_KEY = "tmp_gt"
 
     def __init__(self, train_data_path=TRAIN_DATA_PATH,
@@ -91,9 +90,10 @@ class DataManager:
 
         self.cache_key = cache_key
         '''
-            determining anchors and assigning them to each bounding box can be done only once for a specific dataset
-            * if cache_key is given and there is such cache, it upload data cached under this key when specific operations are called; 
-            * if cache_key is given but there is no such cache, it will create it;
+            * determining anchors and assigning them to each bounding box can be done only once for a specific dataset
+                * if cache_key is given and there is such cache, it upload data cached under this key when specific operations are called; 
+                * if cache_key is given but there is no such cache, it will create it;
+            * the cache key is also used for model saving/loading, if opted for it when declaring the model
         '''
 
     def resize_with_pad(self, img):
@@ -133,7 +133,7 @@ class DataManager:
         '''
         
         if self.used_categories == {}:
-            print("info not yet loaded")
+            tf.print("info not yet loaded")
             quit()
 
         current_loaded = []
@@ -175,11 +175,11 @@ class DataManager:
 
         for gt_batch_idx in range(GT_BATCH_CNT):
 
-            with open(f"{self.CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+            with open(f"{DATA_CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
             bool_masks = pickle.loads(raw_cache)
 
-            with open(f"{self.CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+            with open(f"{DATA_CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
             target_masks = pickle.loads(raw_cache)
 
@@ -200,11 +200,11 @@ class DataManager:
             else:
                 gt_batch_idx += 1
 
-            with open(f"{self.CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+            with open(f"{DATA_CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
             bool_masks = pickle.loads(raw_cache)
 
-            with open(f"{self.CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+            with open(f"{DATA_CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
             target_masks = pickle.loads(raw_cache)
 
@@ -236,7 +236,7 @@ class DataManager:
 
         # TODO remove in the future for better generalization
         if DATA_LOAD_BATCH_SIZE != batch_size:
-            print("Data load batch size must (currently) be equal with the train batch size")
+            tf.print("Data load batch size must (currently) be equal with the train batch size")
             quit()
 
         gt_generator = self.load_gt(purpose)
@@ -352,23 +352,23 @@ class DataManager:
     def determine_anchors(self):
 
         if self.used_categories == {}:
-            print("info not yet loaded")
+            tf.print("info not yet loaded")
             quit()
 
         if self.cache_key is not None:
 
             try:
                 
-                with open(f"{self.CACHE_PATH}{self.cache_key}_anchors.bin", "rb") as cache_f:
+                with open(f"{DATA_CACHE_PATH}{self.cache_key}_anchors.bin", "rb") as cache_f:
                     raw_cache = cache_f.read()
 
                 self.anchors = pickle.loads(raw_cache)
 
-                print("Cache found. Anchors loaded")
+                tf.print("Cache found. Anchors loaded")
                 return
 
             except FileNotFoundError:
-                print("Cache not found. Operations will be fully executed and a new cache will be created")
+                tf.print("Cache not found. Operations will be fully executed and a new cache will be created")
 
         anchor_finder = AnchorFinder(self.imgs)
         self.anchors = tf.cast(tf.convert_to_tensor(anchor_finder.get_anchors()), tf.int32)
@@ -377,17 +377,17 @@ class DataManager:
 
             new_cache = pickle.dumps(self.anchors)
 
-            with open(f"{self.CACHE_PATH}{self.cache_key}_anchors.bin", "wb+") as cache_f:
+            with open(f"{DATA_CACHE_PATH}{self.cache_key}_anchors.bin", "wb+") as cache_f:
                 cache_f.write(new_cache)
 
     def assign_anchors_to_objects(self):
 
         if self.used_categories == {}:
-            print("info not yet loaded")
+            tf.print("info not yet loaded")
             quit()
 
         if self.anchors == []:
-            print("anchors not yet determined")
+            tf.print("anchors not yet determined")
             quit()
 
         if self.cache_key is not None:
@@ -403,17 +403,17 @@ class DataManager:
 
                     for gt_batch_idx in range(GT_BATCH_CNT):
 
-                        with open(f"{self.CACHE_PATH}{self.cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                        with open(f"{DATA_CACHE_PATH}{self.cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                             pass
 
-                        with open(f"{self.CACHE_PATH}{self.cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                        with open(f"{DATA_CACHE_PATH}{self.cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                             pass
 
-                print("Cache found for ground truth masks. It will be loaded when needed")
+                tf.print("Cache found for ground truth masks. It will be loaded when needed")
                 return
 
             except FileNotFoundError:
-                print("Cache not found. Operations will be fully executed and a new cache will be created")
+                tf.print("Cache not found. Operations will be fully executed and a new cache will be created")
 
         '''
             if the cache key is none, these values will not be stored for another round
@@ -444,12 +444,12 @@ class DataManager:
 
             new_cache = pickle.dumps(bool_anchor_masks)
 
-            with open(f"{self.CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
+            with open(f"{DATA_CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
                 cache_f.write(new_cache)
 
             new_cache = pickle.dumps(target_anchor_masks)
 
-            with open(f"{self.CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
+            with open(f"{DATA_CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
                 cache_f.write(new_cache)
 
         for purpose in ["train", "validation"]:
