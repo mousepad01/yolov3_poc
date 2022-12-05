@@ -10,8 +10,6 @@ print("NOTE: this implementation relies on the fact that dictionaries are ORDERE
 
 print("FIXME: FIX DATA_LOAD_BATCH_SIZE AFTER TESTS")
 print("FIXME: RE-INTRODUCE BATCH NORM WHEN FINISHING TESTS WITH 1 IMAGE")
-print("FIXME: ADD OPTIMIZER SAVING")
-print("TODO: TEST AGAIN ONE IMG OVERFIT AFTER DATA LOAD CHANGE ????")
 
 def tests():
 
@@ -76,17 +74,11 @@ def tests():
         # BEFORE RUNNING: 
         # make sure training takes place only on the first img
 
-        #data_manager = DataManager(train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH)
         data_manager = DataManager(cache_key="base")
         data_manager.load_info()
         data_manager.determine_anchors()
         data_manager.assign_anchors_to_objects()
 
-        model = Network(data_manager)
-        model.build_components(backbone="small")
-
-        optimizer = tf.optimizers.Adam(learning_rate=1e-4)
-        
         def _lr_sched(epoch, lr):
 
             if epoch < 800:
@@ -98,7 +90,10 @@ def tests():
             else:
                 return 1e-6
 
-        model.train(1700, optimizer, _lr_sched)
+        model = Network(data_manager, cache_idx="overfit1")
+        model.build_components(backbone="small", optimizer=tf.optimizers.Adam(learning_rate=1e-4), lr_scheduler=_lr_sched)
+        
+        model.train(1700)
 
         for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(1, "train"):
 

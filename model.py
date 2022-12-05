@@ -18,7 +18,7 @@ class ConvLayer(tf.keras.layers.Layer):
         super().__init__()
 
         self.conv = tf.keras.layers.Conv2D(filters=filters, kernel_size=size, strides=stride, padding="same")
-        self.bnorm = tf.keras.layers.BatchNormalization()
+        #self.bnorm = tf.keras.layers.BatchNormalization()
         self.leaky_relu = tf.keras.layers.LeakyReLU(alpha=ConvLayer.LEAKY_RELU_RATE)
 
     def call(self, input):
@@ -65,17 +65,16 @@ class ResSequence(tf.keras.layers.Layer):
 
 class Network:
 
-    def __init__(self, data_manager, use_cache=True, cache_idx=None, store_cache_idx=None):
+    def __init__(self, data_manager, cache_idx=None, store_cache_idx=None):
 
         self.data_manager: DataManager = data_manager
         '''
             contains data info and all that stuff
         '''
         
-        if use_cache:
+        if cache_idx is not None:
 
             assert(self.data_manager.cache_key is not None)
-            assert(cache_idx is not None)
 
             self.cache_key = self.data_manager.cache_key
             '''
@@ -151,7 +150,7 @@ class Network:
     def _compile_and_save_model(self, optimizer: tf.keras.optimizers.Optimizer, last_epoch):
         '''
             internal method for saving a model, along with its optimizer
-            the model is saved automatically (if use_cache is True):
+            the model is saved automatically (if cache is used):
             * in build_components(), if the model is new
             * in train, at the end
             * in train, if it is stopped with Ctrl-C
@@ -168,7 +167,7 @@ class Network:
 
     def build_components(self, optimizer: tf.keras.optimizers.Optimizer, lr_scheduler=lambda epoch, lr: lr, backbone="darknet-53"):
         ''' 
-            if there is already a saved model and "use_cache" option is used, it loads that model
+            if there is already a saved model and cache is used, it loads that model
             if not, it builds the model  using the given parameters
             * optimizer: to use during training (ignored if a saved model is loaded)
             * lr_scheduler(current epoch, current lr) => updated lr
@@ -321,7 +320,7 @@ class Network:
             print("unknown backbone")
             quit()
         
-        self._compile_and_save_model(optimizer, next_epoch=0)
+        self._compile_and_save_model(optimizer, 0)
 
     # TODO use tf.data.Dataset
     def train(self, epochs):
@@ -550,6 +549,10 @@ class Network:
 
             if self.next_training_epoch >= epochs:
                 tf.print(f"Model with key {self.cache_key} (idx {self.cache_idx}) is already trained (at least) {epochs} epochs.")
+                
+                assert(self.cache_key is not None)
+                if self.cache_idx != self.store_cache_idx:
+                    self._compile_and_save_model(self.full_network.optimizer, self.next_training_epoch)
 
             else:
                 tf.print(f"Training for model with key {self.cache_key} (idx {self.cache_idx}) is done ({epochs} epochs).")
