@@ -8,11 +8,10 @@ from model import *
 
 print("NOTE: this implementation relies on the fact that dictionaries are ORDERED. yielding keys in a nedeterministic order breaks everything")
 
-print("TODO: ADD TEST DATA!!!!!!!!!!")
+print("FIXME: FIX DATA_LOAD_BATCH_SIZE AFTER TESTS")
 print("FIXME: RE-INTRODUCE BATCH NORM WHEN FINISHING TESTS WITH 1 IMAGE")
 print("FIXME: ADD OPTIMIZER SAVING")
 print("TODO: TEST AGAIN ONE IMG OVERFIT AFTER DATA LOAD CHANGE ????")
-print("TODO: TEST EVERYTHING FOR DATA BATCH SIZE > 1")
 
 def tests():
 
@@ -77,8 +76,8 @@ def tests():
         # BEFORE RUNNING: 
         # make sure training takes place only on the first img
 
-        #FIXME
-        data_manager = DataManager(train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH)
+        #data_manager = DataManager(train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH)
+        data_manager = DataManager(cache_key="base")
         data_manager.load_info()
         data_manager.determine_anchors()
         data_manager.assign_anchors_to_objects()
@@ -86,9 +85,12 @@ def tests():
         model = Network(data_manager)
         model.build_components(backbone="small")
 
-        model.train()
+        #model.train([(1, tf.optimizers.Adam(learning_rate=1e-4))])
+        model.train([(800, tf.optimizers.Adam(learning_rate=1e-4)), 
+                        (800, tf.optimizers.Adam(learning_rate=1e-5)), 
+                        (100, tf.optimizers.Adam(learning_rate=1e-6))])
 
-        for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(1, "validation"):
+        for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(1, "train"):
 
             out_scale1, out_scale2, out_scale3 = model.full_network(img)
 
@@ -167,8 +169,8 @@ def tests():
 
             break
 
-    _test_mask_encoding()
-    #_test_learning_one_img()
+    #_test_mask_encoding()
+    _test_learning_one_img()
     #_plot_model_stats()
     #_test_cache()
     #_test_train()

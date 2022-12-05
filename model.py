@@ -273,7 +273,7 @@ class Network:
             validation_loss_stats_xy.append(floor((val_loss_xy / VALIDATION_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
             validation_loss_stats_wh.append(floor((val_loss_wh / VALIDATION_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
 
-            tf.print(f"\n===================================================================================================================\n")
+            #tf.print(f"\n===================================================================================================================\n")
             tf.print(f"\nTrain total loss:           {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
             tf.print(f"\nTrain (no-)objectness loss: {floor((sum_loss_noobj / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
             tf.print(f"\nTrain objectness loss:      {floor((sum_loss_obj / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
@@ -359,8 +359,22 @@ class Network:
                         out_s1, out_s2, out_s3 = self.full_network(imgs, training=True)
 
                         loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
+                        print(f"total loss = {loss_value}")
+                        print(f"no obj loss = {noobj}")
+                        print(f"obj loss = {obj}")
+                        print(f"classif loss = {cl}")
+                        print(f"xy loss = {xy}")
+                        print(f"wh loss = {wh}")
+                        print("\n")
 
                         loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
+                        print(f"total loss = {loss_value_}")
+                        print(f"no obj loss = {noobj_}")
+                        print(f"obj loss = {obj_}")
+                        print(f"classif loss = {cl_}")
+                        print(f"xy loss = {xy_}")
+                        print(f"wh loss = {wh_}")
+                        print("\n")
                         loss_value += loss_value_
                         noobj += noobj_
                         obj += obj_
@@ -369,6 +383,13 @@ class Network:
                         wh += wh_
                         
                         loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
+                        print(f"total loss = {loss_value_}")
+                        print(f"no obj loss = {noobj_}")
+                        print(f"obj loss = {obj_}")
+                        print(f"classif loss = {cl_}")
+                        print(f"xy loss = {xy_}")
+                        print(f"wh loss = {wh_}")
+                        print("\n")
                         loss_value += loss_value_
                         noobj += noobj_
                         obj += obj_
@@ -388,6 +409,12 @@ class Network:
                     sum_loss_cl += cl
                     sum_loss_xy += xy
                     sum_loss_wh += wh
+
+                    # FIXME
+                    break
+
+                # FIXME
+                continue
 
                 # validation loop
 
@@ -423,7 +450,7 @@ class Network:
 
             epoch_stage += 1
 
-        _plot_losses()
+        #_plot_losses()
 
     def show_architecture_stats(self):
         self.full_network.summary()

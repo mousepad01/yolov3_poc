@@ -173,18 +173,13 @@ class DataManager:
 
         DATA_BATCH_PER_GT_BATCH = GT_LOAD_BATCH_SIZE // DATA_LOAD_BATCH_SIZE
 
-        # declare outside loop in case total image count < GT_LOAD_BATCH_SIZE
-        gt_batch_idx = 0
-
         for gt_batch_idx in range(GT_BATCH_CNT):
 
-            print(f"gt b idx {gt_batch_idx}")
-
-            with open(f"{self.CACHE_PATH}/{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+            with open(f"{self.CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
             bool_masks = pickle.loads(raw_cache)
 
-            with open(f"{self.CACHE_PATH}/{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+            with open(f"{self.CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
             target_masks = pickle.loads(raw_cache)
 
@@ -200,15 +195,16 @@ class DataManager:
 
         if incomplete is True:
 
-            gt_batch_idx += 1
+            if GT_BATCH_CNT == 0:
+                gt_batch_idx = 0
+            else:
+                gt_batch_idx += 1
 
-            print(f"(rem) gt b idx {gt_batch_idx}")
-
-            with open(f"{self.CACHE_PATH}/{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+            with open(f"{self.CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
             bool_masks = pickle.loads(raw_cache)
 
-            with open(f"{self.CACHE_PATH}/{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+            with open(f"{self.CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
             target_masks = pickle.loads(raw_cache)
 
@@ -363,7 +359,7 @@ class DataManager:
 
             try:
                 
-                with open(f"{self.CACHE_PATH}/{self.cache_key}_anchors.bin", "rb") as cache_f:
+                with open(f"{self.CACHE_PATH}{self.cache_key}_anchors.bin", "rb") as cache_f:
                     raw_cache = cache_f.read()
 
                 self.anchors = pickle.loads(raw_cache)
@@ -381,7 +377,7 @@ class DataManager:
 
             new_cache = pickle.dumps(self.anchors)
 
-            with open(f"{self.CACHE_PATH}/{self.cache_key}_anchors.bin", "wb+") as cache_f:
+            with open(f"{self.CACHE_PATH}{self.cache_key}_anchors.bin", "wb+") as cache_f:
                 cache_f.write(new_cache)
 
     def assign_anchors_to_objects(self):
@@ -407,10 +403,10 @@ class DataManager:
 
                     for gt_batch_idx in range(GT_BATCH_CNT):
 
-                        with open(f"{self.CACHE_PATH}/{self.cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                        with open(f"{self.CACHE_PATH}{self.cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                             pass
 
-                        with open(f"{self.CACHE_PATH}/{self.cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                        with open(f"{self.CACHE_PATH}{self.cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                             pass
 
                 print("Cache found for ground truth masks. It will be loaded when needed")
@@ -448,12 +444,12 @@ class DataManager:
 
             new_cache = pickle.dumps(bool_anchor_masks)
 
-            with open(f"{self.CACHE_PATH}/{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
+            with open(f"{self.CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
                 cache_f.write(new_cache)
 
             new_cache = pickle.dumps(target_anchor_masks)
 
-            with open(f"{self.CACHE_PATH}/{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
+            with open(f"{self.CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
                 cache_f.write(new_cache)
 
         for purpose in ["train", "validation"]:

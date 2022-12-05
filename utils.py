@@ -4,7 +4,8 @@ import cv2 as cv
     Various constants needed in whatever places
 '''
 
-DATA_LOAD_BATCH_SIZE = 1024
+# FIXME
+DATA_LOAD_BATCH_SIZE = 1
 '''
     batch size just for loading
 '''
@@ -14,6 +15,7 @@ GT_LOAD_BATCH_SIZE = 1024
     batch size just for loading ground truth (bool masks, target masks)
 '''
 assert(GT_LOAD_BATCH_SIZE % DATA_LOAD_BATCH_SIZE == 0)
+assert(GT_LOAD_BATCH_SIZE >= DATA_LOAD_BATCH_SIZE)
 
 IMG_SIZE = (416, 416)
 '''
