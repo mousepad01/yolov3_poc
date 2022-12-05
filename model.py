@@ -229,7 +229,12 @@ class Network:
             quit()
 
     # TODO use tf.data.Dataset
-    def train(self, optimizers):
+    def train(self, epochs, optimizer: tf.keras.optimizers.Optimizer, lr_scheduler=lambda epoch, lr: lr):
+        '''
+            * epochs: number of epochs
+            * optimizer
+            * lr_scheduler(current epoch, current lr) => updated lr
+        '''
 
         if self.full_network is None:
             print("network not yet initialized")
@@ -325,130 +330,128 @@ class Network:
 
             plt.show()
 
-        epoch_stage = 0
-        for epochs, optimizer in optimizers:
+        for epoch in range(epochs):
+            
+            new_lr = lr_scheduler(epoch, optimizer.learning_rate)
+            optimizer.learning_rate = new_lr
 
-            for epoch in range(epochs):
+            progbar_output = tf.keras.utils.Progbar(TRAIN_BATCH_CNT)
+            tf.print(f"\nEpoch {epoch} (lr {new_lr}):")
 
-                progbar_output = tf.keras.utils.Progbar(TRAIN_BATCH_CNT)
-                tf.print(f"\nEpoch {epoch} (stage {epoch_stage}):")
+            # loss stats variables
 
-                # loss stats variables
+            sum_loss = 0
+            sum_loss_noobj = 0
+            sum_loss_obj = 0
+            sum_loss_cl = 0
+            sum_loss_xy = 0
+            sum_loss_wh = 0
 
-                sum_loss = 0
-                sum_loss_noobj = 0
-                sum_loss_obj = 0
-                sum_loss_cl = 0
-                sum_loss_xy = 0
-                sum_loss_wh = 0
+            val_loss = 0
+            val_loss_noobj = 0
+            val_loss_obj = 0
+            val_loss_cl = 0
+            val_loss_xy = 0
+            val_loss_wh = 0
 
-                val_loss = 0
-                val_loss_noobj = 0
-                val_loss_obj = 0
-                val_loss_cl = 0
-                val_loss_xy = 0
-                val_loss_wh = 0
+            # train loop
 
-                # train loop
+            batch_idx = 0
+            for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_data(TRAIN_BATCH_SIZE, "train"):
 
-                batch_idx = 0
-                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_data(TRAIN_BATCH_SIZE, "train"):
+                with tf.GradientTape() as tape:
+                
+                    out_s1, out_s2, out_s3 = self.full_network(imgs, training=True)
 
-                    with tf.GradientTape() as tape:
-                    
-                        out_s1, out_s2, out_s3 = self.full_network(imgs, training=True)
-
-                        loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
-                        print(f"total loss = {loss_value}")
-                        print(f"no obj loss = {noobj}")
-                        print(f"obj loss = {obj}")
-                        print(f"classif loss = {cl}")
-                        print(f"xy loss = {xy}")
-                        print(f"wh loss = {wh}")
-                        print("\n")
-
-                        loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
-                        print(f"total loss = {loss_value_}")
-                        print(f"no obj loss = {noobj_}")
-                        print(f"obj loss = {obj_}")
-                        print(f"classif loss = {cl_}")
-                        print(f"xy loss = {xy_}")
-                        print(f"wh loss = {wh_}")
-                        print("\n")
-                        loss_value += loss_value_
-                        noobj += noobj_
-                        obj += obj_
-                        cl += cl_
-                        xy += xy_
-                        wh += wh_
-                        
-                        loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
-                        print(f"total loss = {loss_value_}")
-                        print(f"no obj loss = {noobj_}")
-                        print(f"obj loss = {obj_}")
-                        print(f"classif loss = {cl_}")
-                        print(f"xy loss = {xy_}")
-                        print(f"wh loss = {wh_}")
-                        print("\n")
-                        loss_value += loss_value_
-                        noobj += noobj_
-                        obj += obj_
-                        cl += cl_
-                        xy += xy_
-                        wh += wh_
-
-                    gradients = tape.gradient(loss_value, self.full_network.trainable_weights)
-                    optimizer.apply_gradients(zip(gradients, self.full_network.trainable_weights))
-
-                    batch_idx += 1
-                    progbar_output.update(batch_idx)
-
-                    sum_loss += loss_value
-                    sum_loss_noobj += noobj
-                    sum_loss_obj += obj
-                    sum_loss_cl += cl
-                    sum_loss_xy += xy
-                    sum_loss_wh += wh
-
-                    # FIXME
-                    break
-
-                # FIXME
-                continue
-
-                # validation loop
-
-                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_data(VALIDATION_BATCH_SIZE, "validation"):
-                    
-                    out_s1, out_s2, out_s3 = self.full_network(imgs, training=False)
-
-                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
-                    val_loss += loss_value_
-                    val_loss_noobj += noobj_
-                    val_loss_obj += obj_
-                    val_loss_cl += cl_
-                    val_loss_xy += xy_
-                    val_loss_wh += wh_
+                    loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
+                    print(f"total loss = {loss_value}")
+                    print(f"no obj loss = {noobj}")
+                    print(f"obj loss = {obj}")
+                    print(f"classif loss = {cl}")
+                    print(f"xy loss = {xy}")
+                    print(f"wh loss = {wh}")
+                    print("\n")
 
                     loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
-                    val_loss += loss_value_
-                    val_loss_noobj += noobj_
-                    val_loss_obj += obj_
-                    val_loss_cl += cl_
-                    val_loss_xy += xy_
-                    val_loss_wh += wh_
+                    print(f"total loss = {loss_value_}")
+                    print(f"no obj loss = {noobj_}")
+                    print(f"obj loss = {obj_}")
+                    print(f"classif loss = {cl_}")
+                    print(f"xy loss = {xy_}")
+                    print(f"wh loss = {wh_}")
+                    print("\n")
+                    loss_value += loss_value_
+                    noobj += noobj_
+                    obj += obj_
+                    cl += cl_
+                    xy += xy_
+                    wh += wh_
                     
                     loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
-                    val_loss += loss_value_
-                    val_loss_noobj += noobj_
-                    val_loss_obj += obj_
-                    val_loss_cl += cl_
-                    val_loss_xy += xy_
-                    val_loss_wh += wh_
+                    print(f"total loss = {loss_value_}")
+                    print(f"no obj loss = {noobj_}")
+                    print(f"obj loss = {obj_}")
+                    print(f"classif loss = {cl_}")
+                    print(f"xy loss = {xy_}")
+                    print(f"wh loss = {wh_}")
+                    print("\n")
+                    loss_value += loss_value_
+                    noobj += noobj_
+                    obj += obj_
+                    cl += cl_
+                    xy += xy_
+                    wh += wh_
 
-                _log_show_losses()
+                gradients = tape.gradient(loss_value, self.full_network.trainable_weights)
+                optimizer.apply_gradients(zip(gradients, self.full_network.trainable_weights))
 
-            epoch_stage += 1
+                batch_idx += 1
+                progbar_output.update(batch_idx)
+
+                sum_loss += loss_value
+                sum_loss_noobj += noobj
+                sum_loss_obj += obj
+                sum_loss_cl += cl
+                sum_loss_xy += xy
+                sum_loss_wh += wh
+
+                # FIXME
+                break
+
+            # FIXME
+            continue
+
+            # validation loop
+
+            for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_data(VALIDATION_BATCH_SIZE, "validation"):
+                
+                out_s1, out_s2, out_s3 = self.full_network(imgs, training=False)
+
+                loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
+                val_loss += loss_value_
+                val_loss_noobj += noobj_
+                val_loss_obj += obj_
+                val_loss_cl += cl_
+                val_loss_xy += xy_
+                val_loss_wh += wh_
+
+                loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
+                val_loss += loss_value_
+                val_loss_noobj += noobj_
+                val_loss_obj += obj_
+                val_loss_cl += cl_
+                val_loss_xy += xy_
+                val_loss_wh += wh_
+                
+                loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
+                val_loss += loss_value_
+                val_loss_noobj += noobj_
+                val_loss_obj += obj_
+                val_loss_cl += cl_
+                val_loss_xy += xy_
+                val_loss_wh += wh_
+
+            _log_show_losses()
 
         #_plot_losses()
 
