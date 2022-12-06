@@ -8,7 +8,6 @@ from model import *
 
 print("NOTE: this implementation relies on the fact that dictionaries are ORDERED. yielding keys in a nedeterministic order breaks everything")
 
-print("FIXME: FIX DATA_LOAD_BATCH_SIZE AFTER TESTS")
 print("FIXME: RE-INTRODUCE BATCH NORM WHEN FINISHING TESTS WITH 1 IMAGE")
 print("? TODO: use tf.data.Dataset")
 
@@ -28,7 +27,7 @@ def tests():
                 yield imgid
 
         img_keys = _get_imgid()
-        for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(DATA_LOAD_BATCH_SIZE, "train"):
+        for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(32, "train"):
 
             img_keys_ = []
             for _ in range(imgs.shape[0]):
@@ -94,7 +93,7 @@ def tests():
         model = Network(data_manager, cache_idx="overfit1")
         model.build_components(backbone="small", optimizer=tf.optimizers.Adam(learning_rate=1e-4), lr_scheduler=_lr_sched)
         
-        model.train(1700)
+        model.train(1715, 1)
 
         for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(1, "train"):
 

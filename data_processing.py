@@ -234,17 +234,30 @@ class DataManager:
 
     def load_data(self, batch_size, purpose):
 
-        # TODO remove in the future for better generalization
-        if DATA_LOAD_BATCH_SIZE != batch_size:
-            tf.print("Data load batch size must (currently) be equal with the train batch size")
+        if DATA_LOAD_BATCH_SIZE < batch_size:
+            tf.print("Data load batch size must be >= with the train batch size")
             quit()
+
+        if DATA_LOAD_BATCH_SIZE % batch_size != 0:
+            tf.print("Data load batch size must be divisible with the train batch size")
+            quit()
+
+        load_2_b = DATA_LOAD_BATCH_SIZE // batch_size
 
         gt_generator = self.load_gt(purpose)
         for imgs in self.load_images(purpose):
 
             bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3 = next(gt_generator)
+
+            idx = 0
+            for idx in range(load_2_b - 1):
+                lo = idx * batch_size
+                hi = (idx + 1) * batch_size
+
+                yield tf.cast(imgs[lo: hi], tf.float32) / 255.0, bool_mask_size1[lo: hi], target_mask_size1[lo: hi], bool_mask_size2[lo: hi], target_mask_size2[lo: hi], bool_mask_size3[lo: hi], target_mask_size3[lo: hi]
             
-            yield tf.cast(imgs, tf.float32) / 255.0, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3
+            lo = (load_2_b - 1) * batch_size
+            yield tf.cast(imgs[lo:], tf.float32) / 255.0, bool_mask_size1[lo:], target_mask_size1[lo:], bool_mask_size2[lo:], target_mask_size2[lo:], bool_mask_size3[lo:], target_mask_size3[lo:]
 
     def load_info(self):
         '''

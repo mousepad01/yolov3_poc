@@ -135,7 +135,7 @@ class Network:
             * the last executed epoch
         '''
 
-        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.store_cache_idx}_opt", "rb") as opt_f:
+        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_opt", "rb") as opt_f:
             opt_w = opt_f.read()
             opt_w = pickle.loads(opt_w)
 
@@ -339,18 +339,17 @@ class Network:
         self.full_network.compile(optimizer=optimizer)
         self._save_model(0)
 
-    def train(self, epochs):
+    def train(self, epochs, batch_size):
         '''
             * epochs: number of total epochs (effective number of epochs executed: epochs - self.next_training_epoch + 1)
+            * batch_size: for training
         '''
 
         if self.full_network is None:
             tf.print("Network not yet initialized")
             return
 
-        # FIXME
-        # in the future, vary these parameters
-        TRAIN_BATCH_SIZE = DATA_LOAD_BATCH_SIZE
+        TRAIN_BATCH_SIZE = batch_size
         VALIDATION_BATCH_SIZE = DATA_LOAD_BATCH_SIZE
 
         TRAIN_BATCH_CNT = len(self.data_manager.imgs["train"]) // TRAIN_BATCH_SIZE
@@ -571,7 +570,7 @@ class Network:
                     self._save_model(self.next_training_epoch)
 
             else:
-                tf.print(f"Training for model with key {self.cache_key} (idx {self.cache_idx}) is done ({epochs} epochs).")
+                tf.print(f"\nTraining for model with key {self.cache_key} (idx {self.cache_idx}) is done ({epochs} epochs).")
                 if self.cache_key is not None:
                     self._save_model(epochs)
 

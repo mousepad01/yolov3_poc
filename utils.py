@@ -14,8 +14,7 @@ MODEL_CACHE_PATH = "./saved_models/"
     (relative) path for storing saved models
 '''
 
-# FIXME
-DATA_LOAD_BATCH_SIZE = 1
+DATA_LOAD_BATCH_SIZE = 128
 '''
     batch size just for loading
 '''
