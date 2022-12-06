@@ -15,7 +15,6 @@ def tests():
 
     def _test_mask_encoding():
 
-        #data_manager = DataManager(cache_key="fsttest", train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH)
         data_manager = DataManager(cache_key="base")
         data_manager.load_info()
         data_manager.determine_anchors()
@@ -138,24 +137,39 @@ def tests():
         data_manager.determine_anchors()
         data_manager.assign_anchors_to_objects()
 
-    def _test_train():
+    def _test_learning_few_img():
 
-        # BEFORE RUNNING: 
-        # make sure training takes place only on the first img
-
-        data_manager = DataManager(train_data_path=DataManager.VALIDATION_DATA_PATH, train_info_path=DataManager.VALIDATION_INFO_PATH)
+        data_manager = DataManager(cache_key="base")
         data_manager.load_info()
         data_manager.determine_anchors()
         data_manager.assign_anchors_to_objects()
 
-        model = Network(data_manager)
-        model.build_components(backbone="small")
+        def _lr_sched(epoch, lr):
 
-        model.train()
+            if epoch < 800:
+                return 1e-4
 
-        for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(1, "validation"):
+            elif epoch < 1600:
+                return 1e-5
+
+            else:
+                return 1e-6
+
+        model = Network(data_manager)#, cache_idx="overfit_on2_1")
+        model.build_components(backbone="small", optimizer=tf.optimizers.Adam(learning_rate=1e-4), lr_scheduler=_lr_sched)
+        
+        model.train(1700, 2)
+
+        for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(2, "train"):
 
             out_scale1, out_scale2, out_scale3 = model.full_network(img)
+
+            loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale1, bool_mask_size1, target_mask_size1)
+            print(loss_value, noobj, obj, cl, xy, wh)
+            loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale2, bool_mask_size2, target_mask_size2)
+            print(loss_value, noobj, obj, cl, xy, wh)
+            loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale3, bool_mask_size3, target_mask_size3)
+            print(loss_value, noobj, obj, cl, xy, wh)
 
             anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
         
@@ -169,14 +183,16 @@ def tests():
             output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
 
             show_prediction(np.array(img[0]), output_xy_min, output_xy_max, output_class, output_class_maxp, data_manager.onehot_to_name)
+            show_prediction(np.array(img[1]), output_xy_min, output_xy_max, output_class, output_class_maxp, data_manager.onehot_to_name)
 
             break
 
-    #_test_mask_encoding()
+    _test_mask_encoding()
     #_test_learning_one_img()
     #_plot_model_stats()
     #_test_cache()
     #_test_train()
+    #_test_learning_few_img()
     
 def main():
     

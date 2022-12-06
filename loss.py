@@ -29,7 +29,7 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
     NO_OBJ_COEF = 0.5
     COORD_COEF = 5
 
-    # FIXME exclude more elements from no obj loss ???
+    # TODO exclude more elements from no obj loss ???
     # no-object loss
     output_confidence = tf.sigmoid(output[..., 4:5])
     neg_bool_mask = 1 - bool_mask

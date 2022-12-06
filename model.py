@@ -104,6 +104,7 @@ class Network:
 
             self.cache_key = None
             self.cache_idx = None
+            self.store_cache_idx = None
             self.next_training_epoch = 0
 
         self.backbone: tf.keras.Model = None
@@ -337,7 +338,9 @@ class Network:
             quit()
         
         self.full_network.compile(optimizer=optimizer)
-        self._save_model(0)
+
+        if self.cache_idx is not None:
+            self._save_model(0)
 
     def train(self, epochs, batch_size):
         '''
@@ -472,6 +475,7 @@ class Network:
                     
                         out_s1, out_s2, out_s3 = self.full_network(imgs, training=True)
 
+                        print(tf.reduce_sum(tf.cast(tf.math.is_inf(target_mask_size1), tf.int32)))
                         loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
                         print(f"total loss = {loss_value}")
                         print(f"no obj loss = {noobj}")

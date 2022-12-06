@@ -14,7 +14,7 @@ class DataManager:
     '''
         NOTE:
             * adapted for object detection with single-label classification (for simplicity)
-            * uses only a subset from the entire COCO dataset (currently, food)
+            * uses only a subset from the entire COCO dataset
     '''
 
     TRAIN_DATA_PATH = "./data/train2017/"
@@ -30,7 +30,6 @@ class DataManager:
                         validation_data_path=VALIDATION_DATA_PATH,
                         validation_info_path=VALIDATION_INFO_PATH,
 
-                        img_size=IMG_SIZE,
                         cache_key=None,
                     ):
 
@@ -86,8 +85,6 @@ class DataManager:
             * cacheable
         '''
 
-        self.IMG_SIZE = img_size
-
         self.cache_key = cache_key
         '''
             * determining anchors and assigning them to each bounding box can be done only once for a specific dataset
@@ -123,7 +120,7 @@ class DataManager:
 
             img = np.concatenate([padl, img, padr], 1)
 
-        return tf.convert_to_tensor(cv.resize(img, self.IMG_SIZE))
+        return tf.convert_to_tensor(cv.resize(img, IMG_SIZE))
 
     def load_images(self, purpose):
         '''
@@ -278,19 +275,19 @@ class DataManager:
                 q1 = (h - w) // 2
 
                 off = (q1, 0)
-                ratio = self.IMG_SIZE[0] / h
+                ratio = IMG_SIZE[0] / h
 
             elif h < w:
 
                 q1 = (w - h) // 2
 
                 off = (0, q1)
-                ratio = self.IMG_SIZE[0] / w
+                ratio = IMG_SIZE[0] / w
 
             else:
 
                 off = (0, 0)
-                ratio = self.IMG_SIZE[0] / w    # or h
+                ratio = IMG_SIZE[0] / w    # or h
 
             return off, ratio
 
@@ -332,7 +329,7 @@ class DataManager:
                                                                         "category": self.used_categories[anno["category_id"]]["onehot"],
                                                                         "bbox": (anno["bbox"][1], anno["bbox"][0], anno["bbox"][3], anno["bbox"][2]) 
                                                                     })
-            
+
             for img_info in info["images"]:
 
                 if img_info["id"] not in self.imgs[purpose]:
@@ -359,8 +356,18 @@ class DataManager:
                                             bbox_d["bbox"][2], bbox_d["bbox"][3])
    
                 for bbox_d in self.imgs[purpose][img_info["id"]]["objs"]:
-                    bbox_d["bbox"] = (np.int32(np.floor(ratio * bbox_d["bbox"][0])), np.int32(np.floor(ratio * bbox_d["bbox"][1])), 
-                                        np.int32(np.floor(ratio * bbox_d["bbox"][2])), np.int32(np.floor(ratio * bbox_d["bbox"][3])))
+                    bbox_d["bbox"] = (np.int32(np.round(ratio * bbox_d["bbox"][0])), np.int32(np.round(ratio * bbox_d["bbox"][1])), 
+                                        np.int32(np.round(ratio * bbox_d["bbox"][2])), np.int32(np.round(ratio * bbox_d["bbox"][3])))
+
+                bbox_d_ok = []
+                for bbox_d in self.imgs[purpose][img_info["id"]]["objs"]:
+
+                    if bbox_d["bbox"][2] < MIN_BBOX_DIM or bbox_d["bbox"][3] < MIN_BBOX_DIM:
+                        continue
+
+                    bbox_d_ok.append(bbox_d)
+
+                self.imgs[purpose][img_info["id"]]["objs"] = bbox_d_ok
 
     def determine_anchors(self):
 
@@ -532,6 +539,14 @@ class DataManager:
                                                                                             tf.convert_to_tensor([tf.math.log(h / anchor_h)]),
                                                                                             tf.cast(tf.one_hot(categ, len(self.category_onehot_to_id)), dtype=tf.double)],
                                                                                             axis=0), dtype=np.float64)
+
+                    if tf.reduce_sum(tf.cast(tf.math.is_nan(target_mask[max_iou_scale][cx][cy][max_iou_idx]), tf.int32)) > 0:
+                        tf.print("Nan found when assigning anchors; possible error?")
+                        quit()
+
+                    if tf.reduce_sum(tf.cast(tf.math.is_inf(target_mask[max_iou_scale][cx][cy][max_iou_idx]), tf.int32)) > 0:
+                        tf.print("Inf found when assigning anchors; try to make MIN_BBOX_DIM bigger.")
+                        quit()
 
                 for d in range(SCALE_CNT):
 

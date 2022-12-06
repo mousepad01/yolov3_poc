@@ -31,6 +31,12 @@ IMG_SIZE = (416, 416)
     fixed image input size
 '''
 
+MIN_BBOX_DIM = 3
+'''
+    minimum bounding box dimension (w or h, in pixes, after resize to IMG_SIZE)
+    to filter ground truth
+'''
+
 CLASSIFICATION_SIZE = (256, 256)
 '''
     (UNUSED)
