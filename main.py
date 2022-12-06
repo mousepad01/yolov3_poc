@@ -11,7 +11,7 @@ print("NOTE: this implementation relies on the fact that dictionaries are ORDERE
 print("FIXME: RE-INTRODUCE BATCH NORM WHEN FINISHING TESTS WITH 1 IMAGE")
 print("? TODO: use tf.data.Dataset")
 
-def tests():
+def main():
 
     def _test_mask_encoding():
 
@@ -139,6 +139,8 @@ def tests():
 
     def _test_learning_few_img():
 
+        FEW = 2
+
         data_manager = DataManager(cache_key="base")
         data_manager.load_info()
         data_manager.determine_anchors()
@@ -155,48 +157,68 @@ def tests():
             else:
                 return 1e-6
 
-        model = Network(data_manager)#, cache_idx="overfit_on2_1")
+        model = Network(data_manager, cache_idx="overfit_on2_1")
         model.build_components(backbone="small", optimizer=tf.optimizers.Adam(learning_rate=1e-4), lr_scheduler=_lr_sched)
         
-        model.train(1700, 2)
+        model.train(1700, FEW)
 
-        for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(2, "train"):
+        for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(FEW, "train"):
+            for idx in range(img.shape[0]):
 
-            out_scale1, out_scale2, out_scale3 = model.full_network(img)
+                out_scale1, out_scale2, out_scale3 = model.full_network(img[idx: idx + 1])
 
-            loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale1, bool_mask_size1, target_mask_size1)
-            print(loss_value, noobj, obj, cl, xy, wh)
-            loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale2, bool_mask_size2, target_mask_size2)
-            print(loss_value, noobj, obj, cl, xy, wh)
-            loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale3, bool_mask_size3, target_mask_size3)
-            print(loss_value, noobj, obj, cl, xy, wh)
+                loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale1, bool_mask_size1[idx: idx + 1], target_mask_size1[idx: idx + 1])
+                print(loss_value, noobj, obj, cl, xy, wh)
+                loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale2, bool_mask_size2[idx: idx + 1], target_mask_size2[idx: idx + 1])
+                print(loss_value, noobj, obj, cl, xy, wh)
+                loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale3, bool_mask_size3[idx: idx + 1], target_mask_size3[idx: idx + 1])
+                print(loss_value, noobj, obj, cl, xy, wh)
 
-            anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
-        
-            output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, anchors_relative[0], 0.6)
-            output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, anchors_relative[1], 0.6)
-            output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = make_prediction_perscale(out_scale3, anchors_relative[2], 0.6)
+                anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
+            
+                output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, anchors_relative[0], 0.6)
+                output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, anchors_relative[1], 0.6)
+                output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = make_prediction_perscale(out_scale3, anchors_relative[2], 0.6)
 
-            output_xy_min = [output_xy_min_scale0, output_xy_min_scale1, output_xy_min_scale2]
-            output_xy_max = [output_xy_max_scale0, output_xy_max_scale1, output_xy_max_scale2]
-            output_class = [output_class_scale0, output_class_scale1, output_class_scale2]
-            output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
+                output_xy_min = [output_xy_min_scale0, output_xy_min_scale1, output_xy_min_scale2]
+                output_xy_max = [output_xy_max_scale0, output_xy_max_scale1, output_xy_max_scale2]
+                output_class = [output_class_scale0, output_class_scale1, output_class_scale2]
+                output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
 
-            show_prediction(np.array(img[0]), output_xy_min, output_xy_max, output_class, output_class_maxp, data_manager.onehot_to_name)
-            show_prediction(np.array(img[1]), output_xy_min, output_xy_max, output_class, output_class_maxp, data_manager.onehot_to_name)
+                show_prediction(np.array(img[idx]), output_xy_min, output_xy_max, output_class, output_class_maxp, data_manager.onehot_to_name)
 
             break
 
-    _test_mask_encoding()
+    def _run_training():
+
+        data_manager = DataManager(cache_key="base")
+        data_manager.load_info()
+        data_manager.determine_anchors()
+        data_manager.assign_anchors_to_objects()
+
+        def _lr_sched(epoch, lr):
+
+            if epoch < 60:
+                return 1e-3
+
+            elif epoch < 90:
+                return 1e-4
+
+            else:
+                return 1e-5
+
+        model = Network(data_manager, cache_idx="full")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(learning_rate=1e-3, momentum=0.9), lr_scheduler=_lr_sched)
+        
+        model.train(1700, 32)
+
+    #_test_mask_encoding()
     #_test_learning_one_img()
     #_plot_model_stats()
     #_test_cache()
     #_test_train()
     #_test_learning_few_img()
-    
-def main():
-    
-    tests()
+    _run_training()
     
 if __name__ == "__main__":
     main()
