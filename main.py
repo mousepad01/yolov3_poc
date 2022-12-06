@@ -27,7 +27,7 @@ def tests():
                 yield imgid
 
         img_keys = _get_imgid()
-        for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(32, "train"):
+        for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_manager.load_data(4, "train"):
 
             img_keys_ = []
             for _ in range(imgs.shape[0]):
@@ -66,8 +66,6 @@ def tests():
                                         
                                 data_manager.onehot_to_name,
                                 data_manager.imgs["train"][img_id]["objs"])
-
-                break
 
     def _test_learning_one_img():
 
@@ -175,7 +173,7 @@ def tests():
             break
 
     #_test_mask_encoding()
-    _test_learning_one_img()
+    #_test_learning_one_img()
     #_plot_model_stats()
     #_test_cache()
     #_test_train()

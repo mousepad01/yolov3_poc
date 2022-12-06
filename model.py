@@ -590,8 +590,6 @@ class Network:
         self.full_network.summary()
         tf.keras.utils.plot_model(self.full_network, show_shapes=True)
 
-    # FIXME
-    # use test data, not validation data ????
     def predict(self, threshold=0.6):
         
         if self.full_network is None:
