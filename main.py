@@ -10,6 +10,7 @@ print("NOTE: this implementation relies on the fact that dictionaries are ORDERE
 
 print("FIXME: FIX DATA_LOAD_BATCH_SIZE AFTER TESTS")
 print("FIXME: RE-INTRODUCE BATCH NORM WHEN FINISHING TESTS WITH 1 IMAGE")
+print("? TODO: use tf.data.Dataset")
 
 def tests():
 

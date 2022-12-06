@@ -135,12 +135,24 @@ class Network:
             * the last executed epoch
         '''
 
+        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.store_cache_idx}_opt", "rb") as opt_f:
+            opt_w = opt_f.read()
+            opt_w = pickle.loads(opt_w)
+
         self.full_network = tf.keras.models.load_model(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_model", custom_objects={
                                                                                                                                         "ConvLayer": ConvLayer,
                                                                                                                                         "ResBlock": ResBlock, 
                                                                                                                                         "ResSequence": ResSequence
                                                                                                                                         }
                                                         )
+
+        # hack to initialize weights for the optimizer, so that old ones can be loaded 
+        # https://github.com/keras-team/keras/issues/15298
+        ws = self.full_network.trainable_weights
+        noop = [tf.zeros_like(w) for w in ws]
+        self.full_network.optimizer.apply_gradients(zip(noop, ws))
+
+        self.full_network.optimizer.set_weights(opt_w)
 
         with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_next_epoch", "r") as last_epoch_f:
             self.next_training_epoch = int(last_epoch_f.read())
@@ -159,8 +171,13 @@ class Network:
         self.next_training_epoch = last_epoch
         with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.store_cache_idx}_next_epoch", "w+") as last_epoch_f:
             last_epoch_f.write(f"{self.next_training_epoch}")
+ 
+        opt_w = tf.keras.backend.batch_get_value(self.full_network.optimizer.weights)
+        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.store_cache_idx}_opt", "wb+") as opt_f:
+            opt_w = pickle.dumps(opt_w)
+            opt_f.write(opt_w)
 
-        tf.keras.models.save_model(self.full_network, f"{MODEL_CACHE_PATH}{self.cache_key}_{self.store_cache_idx}_model", overwrite=True, include_optimizer=True)
+        tf.keras.models.save_model(self.full_network, f"{MODEL_CACHE_PATH}{self.cache_key}_{self.store_cache_idx}_model", overwrite=True)
 
         tf.print(f"Model with key {self.cache_key} (idx {self.cache_idx}) has been saved under the idx {self.store_cache_idx}.")
 
@@ -322,7 +339,6 @@ class Network:
         self.full_network.compile(optimizer=optimizer)
         self._save_model(0)
 
-    # TODO use tf.data.Dataset
     def train(self, epochs):
         '''
             * epochs: number of total epochs (effective number of epochs executed: epochs - self.next_training_epoch + 1)
@@ -557,7 +573,7 @@ class Network:
             else:
                 tf.print(f"Training for model with key {self.cache_key} (idx {self.cache_idx}) is done ({epochs} epochs).")
                 if self.cache_key is not None:
-                    self._save_model(epoch)
+                    self._save_model(epochs)
 
             _plot_losses()
         
