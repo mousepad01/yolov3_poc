@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from utils import *
 
-@tf.function
+@tf.function(reduce_retracing=True)
 def yolov3_loss_perscale(output, bool_mask, target_mask):
     '''
         raw output: B x S x S x (A * (C + 5))
