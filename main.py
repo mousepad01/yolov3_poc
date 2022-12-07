@@ -11,6 +11,8 @@ print("NOTE: this implementation relies on the fact that dictionaries are ORDERE
 print("? TODO: use tf.data.Dataset")
 print("TODO refactor code")
 
+tf.logging.set_verbosity(tf.logging.ERROR)
+
 def main():
 
     def _test_mask_encoding():
@@ -210,7 +212,14 @@ def main():
         model = Network(data_loader, cache_idx="full")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(learning_rate=1e-3, momentum=0.9), lr_scheduler=_lr_sched)
         
-        model.train(1, 32)
+        def _checkpoint_sched(epoch, loss, vloss):
+
+            if epoch % 3 == 0:
+                return True
+
+            return False
+
+        model.train(160, 32, _checkpoint_sched)
         model.plot_train_stats()
 
     #_test_mask_encoding()

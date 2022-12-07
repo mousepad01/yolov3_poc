@@ -1,67 +1,14 @@
 from math import floor
 import numpy as np
 import tensorflow as tf
-import cv2 as cv
 import pickle
-from random import randint
 
+from custom_keras import *
 from utils import *
 from loss import *
+
 from predictions import *
 from data_processing import *
-
-class ConvLayer(tf.keras.layers.Layer):
-
-    LEAKY_RELU_RATE = 0.1
-
-    def __init__(self, filters: int, size: int, stride=1):
-        super().__init__()
-
-        self.conv = tf.keras.layers.Conv2D(filters=filters, kernel_size=size, strides=stride, padding="same")
-        self.bnorm = tf.keras.layers.BatchNormalization()
-        self.leaky_relu = tf.keras.layers.LeakyReLU(alpha=ConvLayer.LEAKY_RELU_RATE)
-
-    def call(self, input):
-        
-        _temp = self.conv(input)
-        _temp = self.bnorm(_temp)
-        y = self.leaky_relu(_temp)
-
-        return y
-
-class ResBlock(tf.keras.layers.Layer):
-
-    def __init__(self, filters: int):
-        super().__init__()
-
-        self.conv1 = ConvLayer(filters // 2, 1)
-        self.conv2 = ConvLayer(filters, 3)
-
-    def call(self, input):
-
-        _temp = self.conv1(input)
-        _temp = self.conv2(_temp)
-
-        # number of output channels is the same as in the input
-        # so no conv 1x1
-        y = _temp + input
-
-        return y
-
-class ResSequence(tf.keras.layers.Layer):
-
-    def __init__(self, filters: int, res_block_count: int):
-        super().__init__()
-
-        self.intro_conv = ConvLayer(filters=filters, size=3, stride=2)
-        self.res_seq = tf.keras.Sequential([ResBlock(filters) for _ in range(res_block_count)])
-
-    def call(self, input):
-        
-        _temp = self.intro_conv(input)
-        y = self.res_seq(_temp)
-
-        return y
 
 class Network:
 
@@ -158,6 +105,7 @@ class Network:
 
         tf.print(f"Model copied from idx {self.cache_idx} to idx {new_cache_idx}.")
 
+    # move to cache loader
     def _load_model(self):
         '''
             internal method for loading:
@@ -190,6 +138,7 @@ class Network:
 
         tf.print(f"Model with cache key {self.cache_key} (idx {self.cache_idx}) has been found and loaded, along with its optimizer and the last training epoch.")
 
+    # move to cache saver
     def _save_model(self, last_epoch):
         '''
             internal method for saving a model, along with its optimizer
@@ -212,6 +161,7 @@ class Network:
 
         tf.print(f"Model with key {self.cache_key} (idx {self.cache_idx}) has been saved.")
 
+    # can use cache loader
     def build_components(self, optimizer: tf.keras.optimizers.Optimizer, lr_scheduler=lambda epoch, lr: lr, backbone="darknet-53"):
         ''' 
             if there is already a saved model and cache is used, it loads that model
@@ -372,6 +322,8 @@ class Network:
         if self.cache_idx is not None:
             self._save_model(0)
 
+    # can use cache loader (self passed as arg)
+    # can use cache saver
     def plot_train_stats(self, show_on_screen=False, save_image=True):
         '''
             loads AND shows the train statistics under the cache_key, cache_idx entry
@@ -386,72 +338,68 @@ class Network:
         else:
             cache_key = TMP_CACHE_KEY
             cache_idx = TMP_CACHE_KEY
-
-        try:
             
-            with open(f"{TRAIN_STATS_PATH}{cache_key}_{cache_idx}_stats", "rb") as stats_f:
-                
-                stats = stats_f.read()
-                stats = pickle.loads(stats)
+        with open(f"{TRAIN_STATS_PATH}{cache_key}_{cache_idx}_stats", "rb") as stats_f:
+            
+            stats = stats_f.read()
+            stats = pickle.loads(stats)
 
-            train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj, \
-            train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh, \
-            validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj, \
-            validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh = stats
+        train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj, \
+        train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh, \
+        validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj, \
+        validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh = stats
 
-            _, ax = plt.subplots(3, 2)
-    
-            ax[0][0].plot([idx for idx in range(len(train_loss_stats))],
-                            train_loss_stats)
-            ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
-                            validation_loss_stats)
-            ax[0][0].grid(True)
-            ax[0][0].set_title("total loss")
+        _, ax = plt.subplots(3, 2)
 
-            ax[0][1].plot([idx for idx in range(len(train_loss_stats))],
-                            train_loss_stats_noobj)
-            ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
-                            validation_loss_stats_noobj)
-            ax[0][1].grid(True)
-            ax[0][1].set_title("(no-)objectness loss")
+        ax[0][0].plot([idx for idx in range(len(train_loss_stats))],
+                        train_loss_stats)
+        ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
+                        validation_loss_stats)
+        ax[0][0].grid(True)
+        ax[0][0].set_title("total loss")
 
-            ax[1][0].plot([idx for idx in range(len(train_loss_stats))],
-                            train_loss_stats_obj)
-            ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
-                            validation_loss_stats_obj)
-            ax[1][0].grid(True)
-            ax[1][0].set_title("objectness loss")
+        ax[0][1].plot([idx for idx in range(len(train_loss_stats))],
+                        train_loss_stats_noobj)
+        ax[0][1].plot([idx for idx in range(len(validation_loss_stats))],
+                        validation_loss_stats_noobj)
+        ax[0][1].grid(True)
+        ax[0][1].set_title("(no-)objectness loss")
 
-            ax[1][1].plot([idx for idx in range(len(train_loss_stats))],
-                            train_loss_stats_cl)
-            ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
-                            validation_loss_stats_cl)
-            ax[1][1].grid(True)
-            ax[1][1].set_title("classification loss")
+        ax[1][0].plot([idx for idx in range(len(train_loss_stats))],
+                        train_loss_stats_obj)
+        ax[1][0].plot([idx for idx in range(len(validation_loss_stats))],
+                        validation_loss_stats_obj)
+        ax[1][0].grid(True)
+        ax[1][0].set_title("objectness loss")
 
-            ax[2][0].plot([idx for idx in range(len(train_loss_stats))],
-                            train_loss_stats_xy)
-            ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
-                            validation_loss_stats_xy)
-            ax[2][0].grid(True)
-            ax[2][0].set_title("x-y loss")
+        ax[1][1].plot([idx for idx in range(len(train_loss_stats))],
+                        train_loss_stats_cl)
+        ax[1][1].plot([idx for idx in range(len(validation_loss_stats))],
+                        validation_loss_stats_cl)
+        ax[1][1].grid(True)
+        ax[1][1].set_title("classification loss")
 
-            ax[2][1].plot([idx for idx in range(len(train_loss_stats))],
-                            train_loss_stats_wh)
-            ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
-                            validation_loss_stats_wh)
-            ax[2][1].grid(True)
-            ax[2][1].set_title("w-h loss")
+        ax[2][0].plot([idx for idx in range(len(train_loss_stats))],
+                        train_loss_stats_xy)
+        ax[2][0].plot([idx for idx in range(len(validation_loss_stats))],
+                        validation_loss_stats_xy)
+        ax[2][0].grid(True)
+        ax[2][0].set_title("x-y loss")
 
-            if save_image:
-                plt.savefig(f"{TRAIN_STATS_PATH}{cache_key}_{cache_idx}_stats_plot")
+        ax[2][1].plot([idx for idx in range(len(train_loss_stats))],
+                        train_loss_stats_wh)
+        ax[2][1].plot([idx for idx in range(len(validation_loss_stats))],
+                        validation_loss_stats_wh)
+        ax[2][1].grid(True)
+        ax[2][1].set_title("w-h loss")
 
-            if show_on_screen:
-                plt.show()
+        if save_image:
+            plt.savefig(f"{TRAIN_STATS_PATH}{cache_key}_{cache_idx}_stats_plot")
 
-        except FileNotFoundError:
-            tf.print("No stats have been found (has the model been trained?).")
+        if show_on_screen:
+            plt.show()
 
+    # can use cache loader
     def _load_train_stats(self):
         '''
             loads the train statistics under the cache_key, cache_idx entry
@@ -478,6 +426,7 @@ class Network:
 
             return [[] for _ in range(12)]
 
+    # move to cache saver
     def _save_train_stats(self, stats):
         '''
             saves the train statistics under the cache_key, cache_idx entry
@@ -496,6 +445,7 @@ class Network:
             stats = pickle.dumps(stats)
             stats_f.write(stats)
             
+    # can use cache loader / saver
     def train(self, epochs, batch_size, checkpoint_sched=lambda epoch, loss, vloss: False):
         '''
             * epochs: number of total epochs (effective number of epochs executed: epochs - self.next_training_epoch + 1)

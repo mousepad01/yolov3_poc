@@ -1,4 +1,3 @@
-import cv2 as cv
 
 '''
     Various constants needed in whatever places
