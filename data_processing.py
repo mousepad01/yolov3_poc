@@ -10,7 +10,7 @@ import tensorflow as tf
 from anchor_kmeans import *
 from utils import *
 
-class DataManager:
+class DataLoader:
     '''
         NOTE:
             * adapted for object detection with single-label classification (for simplicity)

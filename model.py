@@ -65,18 +65,18 @@ class ResSequence(tf.keras.layers.Layer):
 
 class Network:
 
-    def __init__(self, data_manager, cache_idx=None):
+    def __init__(self, data_loader, cache_idx=None):
 
-        self.data_manager: DataManager = data_manager
+        self.data_loader: DataLoader = data_loader
         '''
             contains data info and all that stuff
         '''
         
         if cache_idx is not None:
 
-            assert(self.data_manager.cache_key is not None)
+            assert(self.data_loader.cache_key is not None)
 
-            self.cache_key = self.data_manager.cache_key
+            self.cache_key = self.data_loader.cache_key
             '''
                 cache key used for saving/loading a model
             '''
@@ -239,7 +239,7 @@ class Network:
 
         tf.print("Building a new model...")
 
-        CLASS_COUNT = len(self.data_manager.used_categories)
+        CLASS_COUNT = len(self.data_loader.used_categories)
 
         if backbone == "darknet-53":
         
@@ -509,11 +509,16 @@ class Network:
         TRAIN_BATCH_SIZE = batch_size
         VALIDATION_BATCH_SIZE = DATA_LOAD_BATCH_SIZE
 
-        TRAIN_IMG_CNT = self.data_manager.get_img_cnt("train")
-        VALIDATION_IMG_CNT = self.data_manager.get_img_cnt("validation")
+        TRAIN_IMG_CNT = self.data_loader.get_img_cnt("train")
+        VALIDATION_IMG_CNT = self.data_loader.get_img_cnt("validation")
 
         TRAIN_BATCH_CNT = TRAIN_IMG_CNT // TRAIN_BATCH_SIZE
+        if TRAIN_IMG_CNT % TRAIN_BATCH_SIZE > 0:
+            TRAIN_BATCH_CNT += 1
+
         VALIDATION_BATCH_CNT = VALIDATION_IMG_CNT // VALIDATION_BATCH_SIZE
+        if VALIDATION_IMG_CNT % VALIDATION_BATCH_SIZE > 0:
+            VALIDATION_BATCH_CNT += 1
 
         train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj, \
         train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh, \
@@ -587,7 +592,7 @@ class Network:
                 # train loop
 
                 batch_idx = 0
-                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_data(TRAIN_BATCH_SIZE, "train"):
+                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_loader.load_data(TRAIN_BATCH_SIZE, "train"):
 
                     with tf.GradientTape() as tape:
                     
@@ -646,7 +651,7 @@ class Network:
 
                 # validation loop
 
-                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_manager.load_data(VALIDATION_BATCH_SIZE, "validation"):
+                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_loader.load_data(VALIDATION_BATCH_SIZE, "validation"):
                     
                     out_s1, out_s2, out_s3 = self.full_network(imgs, training=False)
 
@@ -724,11 +729,11 @@ class Network:
             tf.print("Network not yet initialized")
             return
 
-        for (img, _, _, _, _, _, _) in self.data_manager.load_data(1, "validation"):
+        for (img, _, _, _, _, _, _) in self.data_loader.load_data(1, "validation"):
 
             out_scale1, out_scale2, out_scale3 = self.full_network(img, training=False)
 
-            anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (self.data_manager.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
+            anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (self.data_loader.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
         
             output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, anchors_relative[0], threshold)
             output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, anchors_relative[1], threshold)
@@ -739,4 +744,4 @@ class Network:
             output_class = [output_class_scale0, output_class_scale1, output_class_scale2]
             output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
 
-            show_prediction(np.array(img[0]), output_xy_min, output_xy_max, output_class, output_class_maxp, self.data_manager.onehot_to_name)
+            show_prediction(np.array(img[0]), output_xy_min, output_xy_max, output_class, output_class_maxp, self.data_loader.onehot_to_name)
