@@ -8,8 +8,6 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
         raw output: B x S x S x (A * (C + 5))
         (last dimension: tx, ty, tw, th, to, l0, l1, ...l(C-1))
 
-        anchors: A x 2
-
         bool_mask: B x S x S x A x 1
 
         target_mask: B x S x S x A x (4 + C)
@@ -26,8 +24,8 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
         * coordinate loss
     '''
 
-    NO_OBJ_COEF = 0.5
-    COORD_COEF = 5
+    NO_OBJ_COEF = tf.constant(0.5)
+    COORD_COEF = tf.constant(5.0)
 
     # TODO exclude more elements from no obj loss ???
     # no-object loss

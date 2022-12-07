@@ -4,7 +4,7 @@ import cv2 as cv
     Various constants needed in whatever places
 '''
 
-DATA_CACHE_PATH = "./cache_entries/"
+DATA_CACHE_PATH = "./data_cache/"
 '''
     (relative) path for storing data (anchors, gt masks) caches
 '''
@@ -12,6 +12,16 @@ DATA_CACHE_PATH = "./cache_entries/"
 MODEL_CACHE_PATH = "./saved_models/"
 '''
     (relative) path for storing saved models
+'''
+
+TRAIN_STATS_PATH = "./train_stats/"
+'''
+    (relative) path for storing train statistics
+'''
+
+TMP_CACHE_KEY = "tmp"
+'''
+    key for temporary cache, if needed
 '''
 
 DATA_LOAD_BATCH_SIZE = 128
@@ -65,7 +75,27 @@ CLASS_TO_COLOR = [(255, 0, 0), (0, 0, 255), (0, 255, 0), (0, 0, 0), (255, 0, 255
 for idx, rgb in enumerate(CLASS_TO_COLOR):
     CLASS_TO_COLOR[idx] = (rgb[2], rgb[1], rgb[0])
 
-LOSS_OUTPUT_PRECISION = 3
+LOSS_OUTPUT_PRECISION = 4
 '''
     how many decimals for loss output - does not influence in any way the model
+'''
+
+TRAIN_DATA_PATH = "./data/train2017/"
+'''
+    train data path
+'''
+
+VALIDATION_DATA_PATH = "./data/val2017/"
+'''
+    validation data path
+'''
+
+TRAIN_INFO_PATH = "./data/annotations/instances_train2017.json"
+'''
+    train metadata
+'''
+
+VALIDATION_INFO_PATH = "./data/annotations/instances_val2017.json"
+'''
+    validation metadata
 '''

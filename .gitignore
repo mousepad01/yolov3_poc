@@ -11,3 +11,4 @@ model.png
 *.bsub
 *saved_models*
 *test*
+*train_stats*

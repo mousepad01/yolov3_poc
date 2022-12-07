@@ -10,6 +10,7 @@ print("NOTE: this implementation relies on the fact that dictionaries are ORDERE
 
 print("FIXME: RE-INTRODUCE BATCH NORM WHEN FINISHING TESTS WITH 1 IMAGE")
 print("? TODO: use tf.data.Dataset")
+print("TODO refactor code")
 
 def main():
 
@@ -210,7 +211,8 @@ def main():
         model = Network(data_manager, cache_idx="full")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(learning_rate=1e-3, momentum=0.9), lr_scheduler=_lr_sched)
         
-        model.train(1700, 32)
+        model.train(1, 32)
+        model.plot_train_stats()
 
     #_test_mask_encoding()
     #_test_learning_one_img()

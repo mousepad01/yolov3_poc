@@ -65,7 +65,7 @@ class ResSequence(tf.keras.layers.Layer):
 
 class Network:
 
-    def __init__(self, data_manager, cache_idx=None, store_cache_idx=None):
+    def __init__(self, data_manager, cache_idx=None):
 
         self.data_manager: DataManager = data_manager
         '''
@@ -84,16 +84,7 @@ class Network:
             self.cache_idx = cache_idx
             '''
                 to be able to use the same data cache for multiple model savings, a cache "subkey" is also used
-                * NOTE: if source_cache_idx is not specified, it is used for both loading and storing
             '''
-
-            self.store_cache_idx = store_cache_idx
-            '''
-                used for saving the model
-                * if not given, it is the same as cache_idx and, if it exists, it overwrites the old entry
-            '''
-            if store_cache_idx is None:
-                self.store_cache_idx = self.cache_idx
 
             self.next_training_epoch = 0
             '''
@@ -104,7 +95,6 @@ class Network:
 
             self.cache_key = None
             self.cache_idx = None
-            self.store_cache_idx = None
             self.next_training_epoch = 0
 
         self.backbone: tf.keras.Model = None
@@ -127,6 +117,46 @@ class Network:
             schedule the learning rate during training
             * NOTE: this function is not saved when the training is interrupred; it is best this function is defined stateless
         '''
+
+    def copy_model(self, new_cache_idx):
+        '''
+            Copy model cache and its stats under new cache_idx (same cache_key)
+        '''
+
+        assert(new_cache_idx != TMP_CACHE_KEY)
+
+        if self.cache_key is None:
+            tf.print("Cannot copy when current model is not cached")
+
+        assert(new_cache_idx != self.cache_idx)
+
+        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_opt", "rb") as opt_f:
+            with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{new_cache_idx}_opt", "wb+") as opt_f_:
+
+                opt_w = opt_f.read()
+                opt_f_.write(opt_w)
+
+        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_next_epoch", "r") as last_epoch_f:
+            with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{new_cache_idx}_next_epoch", "w+") as last_epoch_f_:
+
+                training_epoch = last_epoch_f.read()
+                last_epoch_f_.write(training_epoch)
+
+        full_network = tf.keras.models.load_model(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_model", custom_objects={
+                                                                                                                                "ConvLayer": ConvLayer,
+                                                                                                                                "ResBlock": ResBlock, 
+                                                                                                                                "ResSequence": ResSequence
+                                                                                                                                }
+                                                        )
+        tf.keras.models.save_model(full_network, f"{MODEL_CACHE_PATH}{self.cache_key}_{new_cache_idx}_model", overwrite=True)
+
+        with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{self.cache_idx}_stats", "rb") as stats_f:
+            with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{new_cache_idx}_stats", "wb+") as stats_f_:
+
+                stats = stats_f.read()
+                stats_f_.write(stats)
+
+        tf.print(f"Model copied from idx {self.cache_idx} to idx {new_cache_idx}.")
 
     def _load_model(self):
         '''
@@ -170,17 +200,17 @@ class Network:
         '''
         
         self.next_training_epoch = last_epoch
-        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.store_cache_idx}_next_epoch", "w+") as last_epoch_f:
+        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_next_epoch", "w+") as last_epoch_f:
             last_epoch_f.write(f"{self.next_training_epoch}")
  
         opt_w = tf.keras.backend.batch_get_value(self.full_network.optimizer.weights)
-        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.store_cache_idx}_opt", "wb+") as opt_f:
+        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_opt", "wb+") as opt_f:
             opt_w = pickle.dumps(opt_w)
             opt_f.write(opt_w)
 
-        tf.keras.models.save_model(self.full_network, f"{MODEL_CACHE_PATH}{self.cache_key}_{self.store_cache_idx}_model", overwrite=True)
+        tf.keras.models.save_model(self.full_network, f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_model", overwrite=True)
 
-        tf.print(f"Model with key {self.cache_key} (idx {self.cache_idx}) has been saved under the idx {self.store_cache_idx}.")
+        tf.print(f"Model with key {self.cache_key} (idx {self.cache_idx}) has been saved.")
 
     def build_components(self, optimizer: tf.keras.optimizers.Optimizer, lr_scheduler=lambda epoch, lr: lr, backbone="darknet-53"):
         ''' 
@@ -342,6 +372,130 @@ class Network:
         if self.cache_idx is not None:
             self._save_model(0)
 
+    def plot_train_stats(self, show_on_screen=False, save_image=True):
+        '''
+            loads AND shows the train statistics under the cache_key, cache_idx entry
+            * show_on_screen: if True, show on screen
+            * save_image: if True, save as image in the TRAIN_STATS_PATH
+        '''
+
+        if self.cache_key is not None:
+            cache_key = self.cache_key
+            cache_idx = self.cache_idx
+
+        else:
+            cache_key = TMP_CACHE_KEY
+            cache_idx = TMP_CACHE_KEY
+
+        try:
+            
+            with open(f"{TRAIN_STATS_PATH}{cache_key}_{cache_idx}_stats", "rb") as stats_f:
+                
+                stats = stats_f.read()
+                stats = pickle.loads(stats)
+
+            train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj, \
+            train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh, \
+            validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj, \
+            validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh = stats
+
+            _, ax = plt.subplots(3, 2)
+    
+            ax[0][0].plot([idx for idx in range(len(train_loss_stats))],
+                            train_loss_stats)
+            ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
+                            validation_loss_stats)
+            ax[0][0].grid(True)
+            ax[0][0].set_title("total loss")
+
+            ax[0][1].plot([idx for idx in range(len(train_loss_stats))],
+                            train_loss_stats_noobj)
+            ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
+                            validation_loss_stats_noobj)
+            ax[0][1].grid(True)
+            ax[0][1].set_title("(no-)objectness loss")
+
+            ax[1][0].plot([idx for idx in range(len(train_loss_stats))],
+                            train_loss_stats_obj)
+            ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
+                            validation_loss_stats_obj)
+            ax[1][0].grid(True)
+            ax[1][0].set_title("objectness loss")
+
+            ax[1][1].plot([idx for idx in range(len(train_loss_stats))],
+                            train_loss_stats_cl)
+            ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
+                            validation_loss_stats_cl)
+            ax[1][1].grid(True)
+            ax[1][1].set_title("classification loss")
+
+            ax[2][0].plot([idx for idx in range(len(train_loss_stats))],
+                            train_loss_stats_xy)
+            ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
+                            validation_loss_stats_xy)
+            ax[2][0].grid(True)
+            ax[2][0].set_title("x-y loss")
+
+            ax[2][1].plot([idx for idx in range(len(train_loss_stats))],
+                            train_loss_stats_wh)
+            ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
+                            validation_loss_stats_wh)
+            ax[2][1].grid(True)
+            ax[2][1].set_title("w-h loss")
+
+            if save_image:
+                plt.savefig(f"{TRAIN_STATS_PATH}{cache_key}_{cache_idx}_stats_plot")
+
+            if show_on_screen:
+                plt.show()
+
+        except FileNotFoundError:
+            tf.print("No stats have been found (has the model been trained?).")
+
+    def _load_train_stats(self):
+        '''
+            loads the train statistics under the cache_key, cache_idx entry
+        '''
+
+        if self.cache_key is not None:
+            cache_key = self.cache_key
+            cache_idx = self.cache_idx
+
+        else:
+            cache_key = TMP_CACHE_KEY
+            cache_idx = TMP_CACHE_KEY
+
+        try:
+            
+            with open(f"{TRAIN_STATS_PATH}{cache_key}_{cache_idx}_stats", "rb") as stats_f:
+                
+                stats = stats_f.read()
+                stats = pickle.loads(stats)
+
+            return stats
+
+        except FileNotFoundError:
+
+            return [[] for _ in range(12)]
+
+    def _save_train_stats(self, stats):
+        '''
+            saves the train statistics under the cache_key, cache_idx entry
+        '''
+
+        if self.cache_key is not None:
+            cache_key = self.cache_key
+            cache_idx = self.cache_idx
+
+        else:
+            cache_key = TMP_CACHE_KEY
+            cache_idx = TMP_CACHE_KEY
+
+        with open(f"{TRAIN_STATS_PATH}{cache_key}_{cache_idx}_stats", "wb+") as stats_f:
+            
+            stats = pickle.dumps(stats)
+            stats_f.write(stats)
+            
     def train(self, epochs, batch_size):
         '''
             * epochs: number of total epochs (effective number of epochs executed: epochs - self.next_training_epoch + 1)
@@ -355,90 +509,54 @@ class Network:
         TRAIN_BATCH_SIZE = batch_size
         VALIDATION_BATCH_SIZE = DATA_LOAD_BATCH_SIZE
 
-        TRAIN_BATCH_CNT = len(self.data_manager.imgs["train"]) // TRAIN_BATCH_SIZE
-        VALIDATION_BATCH_CNT = len(self.data_manager.imgs["validation"]) // VALIDATION_BATCH_SIZE
+        TRAIN_IMG_CNT = self.data_manager.get_img_cnt("train")
+        VALIDATION_IMG_CNT = self.data_manager.get_img_cnt("validation")
 
-        train_loss_stats = []
-        train_loss_stats_noobj = []
-        train_loss_stats_obj = []
-        train_loss_stats_cl = []
-        train_loss_stats_xy = []
-        train_loss_stats_wh = []
+        TRAIN_BATCH_CNT = TRAIN_IMG_CNT // TRAIN_BATCH_SIZE
+        VALIDATION_BATCH_CNT = VALIDATION_IMG_CNT // VALIDATION_BATCH_SIZE
 
-        validation_loss_stats = []
-        validation_loss_stats_noobj = []
-        validation_loss_stats_obj = []
-        validation_loss_stats_cl = []
-        validation_loss_stats_xy = []
-        validation_loss_stats_wh = []
+        train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj, \
+        train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh, \
+        validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj, \
+        validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh = self._load_train_stats()
 
         def _log_show_losses():
 
-            train_loss_stats.append(floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-            train_loss_stats_noobj.append(floor((sum_loss_noobj / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-            train_loss_stats_obj.append(floor((sum_loss_obj / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-            train_loss_stats_cl.append(floor((sum_loss_cl / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-            train_loss_stats_xy.append(floor((sum_loss_xy / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-            train_loss_stats_wh.append(floor((sum_loss_wh / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+            def _to_output_t(x): 
+                return floor((x / TRAIN_IMG_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)
 
-            validation_loss_stats.append(floor((val_loss / VALIDATION_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-            validation_loss_stats_noobj.append(floor((val_loss_noobj / VALIDATION_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-            validation_loss_stats_obj.append(floor((val_loss_obj / VALIDATION_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-            validation_loss_stats_cl.append(floor((val_loss_cl / VALIDATION_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-            validation_loss_stats_xy.append(floor((val_loss_xy / VALIDATION_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
-            validation_loss_stats_wh.append(floor((val_loss_wh / VALIDATION_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION))
+            def _to_output_v(x):
+                return floor((x / VALIDATION_IMG_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)
+
+            train_loss_stats.append(_to_output_t(sum_loss))
+            train_loss_stats_noobj.append(_to_output_t(sum_loss_noobj))
+            train_loss_stats_obj.append(_to_output_t(sum_loss_obj))
+            train_loss_stats_cl.append(_to_output_t(sum_loss_cl))
+            train_loss_stats_xy.append(_to_output_t(sum_loss_xy))
+            train_loss_stats_wh.append(_to_output_t(sum_loss_wh))
+
+            validation_loss_stats.append(_to_output_v(val_loss))
+            validation_loss_stats_noobj.append(_to_output_v(val_loss_noobj))
+            validation_loss_stats_obj.append(_to_output_v(val_loss_obj))
+            validation_loss_stats_cl.append(_to_output_v(val_loss_cl))
+            validation_loss_stats_xy.append(_to_output_v(val_loss_xy))
+            validation_loss_stats_wh.append(_to_output_v(val_loss))
 
             #tf.print(f"\n===================================================================================================================\n")
-            tf.print(f"\nTrain total loss:           {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
-            tf.print(f"\nTrain (no-)objectness loss: {floor((sum_loss_noobj / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
-            tf.print(f"\nTrain objectness loss:      {floor((sum_loss_obj / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
-            tf.print(f"\nTrain classification loss:  {floor((sum_loss_cl / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
-            tf.print(f"\nTrain x-y loss:             {floor((sum_loss_xy / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
-            tf.print(f"\nTrain w-h loss:             {floor((sum_loss_wh / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
+            tf.print(f"\nTrain total loss:           {_to_output_t(sum_loss)}")
+            tf.print(f"\nTrain (no-)objectness loss: {_to_output_t(sum_loss_noobj)}")
+            tf.print(f"\nTrain objectness loss:      {_to_output_t(sum_loss_obj)}")
+            tf.print(f"\nTrain classification loss:  {_to_output_t(sum_loss_cl)}")
+            tf.print(f"\nTrain x-y loss:             {_to_output_t(sum_loss_xy)}")
+            tf.print(f"\nTrain w-h loss:             {_to_output_t(sum_loss_wh)}")
             tf.print(f"\n")
-            tf.print(f"\nValidation total loss:           {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
-            tf.print(f"\nValidation (no-)objectness loss: {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
-            tf.print(f"\nValidation objectness loss:      {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
-            tf.print(f"\nValidation classification loss:  {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
-            tf.print(f"\nValidation x-y loss:             {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
-            tf.print(f"\nValidation w-h loss:             {floor((sum_loss / TRAIN_BATCH_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)}")
+            tf.print(f"\nValidation total loss:           {_to_output_v(val_loss)}")
+            tf.print(f"\nValidation (no-)objectness loss: {_to_output_v(val_loss_noobj)}")
+            tf.print(f"\nValidation objectness loss:      {_to_output_v(val_loss_obj)}")
+            tf.print(f"\nValidation classification loss:  {_to_output_v(val_loss_cl)}")
+            tf.print(f"\nValidation x-y loss:             {_to_output_v(val_loss_xy)}")
+            tf.print(f"\nValidation w-h loss:             {_to_output_v(val_loss_wh)}")
             tf.print(f"\n===================================================================================================================\n")
-
-        def _plot_losses():
-
-            _, ax = plt.subplots(3, 2)
-        
-            ax[0][0].plot([idx for idx in range(len(train_loss_stats))],
-                            train_loss_stats)
-            ax[0][0].grid(True)
-            ax[0][0].set_title("total loss")
-
-            ax[0][1].plot([idx for idx in range(len(train_loss_stats))],
-                            train_loss_stats_noobj)
-            ax[0][1].grid(True)
-            ax[0][1].set_title("(no-)objectness loss")
-
-            ax[1][0].plot([idx for idx in range(len(train_loss_stats))],
-                            train_loss_stats_obj)
-            ax[1][0].grid(True)
-            ax[1][0].set_title("objectness loss")
-
-            ax[1][1].plot([idx for idx in range(len(train_loss_stats))],
-                            train_loss_stats_cl)
-            ax[1][1].grid(True)
-            ax[1][1].set_title("classification loss")
-
-            ax[2][0].plot([idx for idx in range(len(train_loss_stats))],
-                            train_loss_stats_xy)
-            ax[2][0].grid(True)
-            ax[2][0].set_title("x-y loss")
-
-            ax[2][1].plot([idx for idx in range(len(train_loss_stats))],
-                            train_loss_stats_wh)
-            ax[2][1].grid(True)
-            ax[2][1].set_title("w-h loss")
-
-            plt.show()
 
         try:
 
@@ -491,15 +609,9 @@ class Network:
                         print(f"classif loss = {cl_}")
                         print(f"xy loss = {xy_}")
                         print(f"wh loss = {wh_}")
-                        print("\n")'''
-                        loss_value += loss_value_
-                        noobj += noobj_
-                        obj += obj_
-                        cl += cl_
-                        xy += xy_
-                        wh += wh_
+                        print("\n")'''                        
                         
-                        loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
+                        loss_value__, noobj__, obj__, cl__, xy__, wh__ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
                         '''print(f"total loss = {loss_value_}")
                         print(f"no obj loss = {noobj_}")
                         print(f"obj loss = {obj_}")
@@ -507,12 +619,13 @@ class Network:
                         print(f"xy loss = {xy_}")
                         print(f"wh loss = {wh_}")
                         print("\n")'''
-                        loss_value += loss_value_
-                        noobj += noobj_
-                        obj += obj_
-                        cl += cl_
-                        xy += xy_
-                        wh += wh_
+
+                        loss_value += loss_value_ + loss_value__
+                        noobj += noobj_ + noobj__
+                        obj += obj_ + obj__
+                        cl += cl_ + cl__
+                        xy += xy_ + xy__
+                        wh += wh_ + wh__
 
                     gradients = tape.gradient(loss_value, self.full_network.trainable_weights)
                     self.full_network.optimizer.apply_gradients(zip(gradients, self.full_network.trainable_weights))
@@ -565,29 +678,43 @@ class Network:
 
             if self.next_training_epoch >= epochs:
                 tf.print(f"Model with key {self.cache_key} (idx {self.cache_idx}) is already trained (at least) {epochs} epochs.")
-                
-                assert(self.cache_key is not None)
-                if self.cache_idx != self.store_cache_idx:
-                    self._save_model(self.next_training_epoch)
 
             else:
                 tf.print(f"\nTraining for model with key {self.cache_key} (idx {self.cache_idx}) is done ({epochs} epochs).")
+
                 if self.cache_key is not None:
                     self._save_model(epochs)
 
-            _plot_losses()
+                stats = [train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj,
+                        train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh,
+                        validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj,
+                        validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh]
+
+                self._save_train_stats(stats)
         
         except KeyboardInterrupt:
 
             if self.cache_key is not None:
                 tf.print(f"Training paused for model with key {self.cache_key} (idx {self.cache_idx}) at epoch {epoch}")
+
+                self._save_model(epoch)
+
+                # NOTE 
+                # if the interrupt is generated in the middle of _log_show_losses (which is not atomic),
+                # stats may become broken, so we make sure this does not happen
+
+                stats = [train_loss_stats[:epoch], train_loss_stats_noobj[:epoch], train_loss_stats_obj[:epoch],
+                        train_loss_stats_cl[:epoch], train_loss_stats_xy[:epoch], train_loss_stats_wh[:epoch],
+                        validation_loss_stats[:epoch], validation_loss_stats_noobj[:epoch], validation_loss_stats_obj[:epoch],
+                        validation_loss_stats_cl[:epoch], validation_loss_stats_xy[:epoch], validation_loss_stats_wh[:epoch]]
+
+                self._save_train_stats(stats)
+
             else:
                 tf.print("Training interrupted; there is no cache key so the intermediary model will not be saved.")
 
-            if self.cache_key is not None:
-                self._save_model(epoch)
-
     def show_architecture_stats(self):
+
         self.full_network.summary()
         tf.keras.utils.plot_model(self.full_network, show_shapes=True)
 

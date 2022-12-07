@@ -17,14 +17,6 @@ class DataManager:
             * uses only a subset from the entire COCO dataset
     '''
 
-    TRAIN_DATA_PATH = "./data/train2017/"
-    VALIDATION_DATA_PATH = "./data/val2017/"
-
-    TRAIN_INFO_PATH = "./data/annotations/instances_train2017.json"
-    VALIDATION_INFO_PATH = "./data/annotations/instances_val2017.json"
-
-    FAKE_CACHE_KEY = "tmp_gt"
-
     def __init__(self, train_data_path=TRAIN_DATA_PATH,
                         train_info_path=TRAIN_INFO_PATH,
                         validation_data_path=VALIDATION_DATA_PATH,
@@ -33,7 +25,7 @@ class DataManager:
                         cache_key=None,
                     ):
 
-        assert(cache_key != DataManager.FAKE_CACHE_KEY)
+        assert(cache_key != TMP_CACHE_KEY)
         
         self.data_path = {
                             "train": train_data_path,
@@ -92,6 +84,14 @@ class DataManager:
                 * if cache_key is given but there is no such cache, it will create it;
             * the cache key is also used for model saving/loading, if opted for it when declaring the model
         '''
+
+    def get_img_cnt(self, purpose):
+
+        if purpose == "train":
+            return len(self.imgs["train"])
+
+        elif purpose == "validation":
+            return len(self.imgs["validation"])
 
     def resize_with_pad(self, img):
         '''
@@ -159,11 +159,11 @@ class DataManager:
         '''
 
         if self.cache_key is None:
-            cache_key = DataManager.FAKE_CACHE_KEY
+            cache_key = TMP_CACHE_KEY
         else:
             cache_key = self.cache_key
 
-        IMG_CNT = len(self.imgs[purpose].keys())
+        IMG_CNT = self.get_img_cnt(purpose)
         GT_BATCH_CNT = IMG_CNT // GT_LOAD_BATCH_SIZE
 
         incomplete = ((IMG_CNT % GT_LOAD_BATCH_SIZE) > 0)
@@ -416,7 +416,7 @@ class DataManager:
 
                 for purpose in ["train", "validation"]:
                     
-                    IMG_CNT = len(self.imgs[purpose].keys())
+                    IMG_CNT = self.get_img_cnt(purpose)
                     GT_BATCH_CNT = IMG_CNT // GT_LOAD_BATCH_SIZE
                     if IMG_CNT % GT_LOAD_BATCH_SIZE > 0:
                         GT_BATCH_CNT += 1
@@ -441,7 +441,7 @@ class DataManager:
             so, we create a fake cache under FAKE_CACHE_KEY
         '''
         if self.cache_key is None:
-            cache_key = DataManager.FAKE_CACHE_KEY
+            cache_key = TMP_CACHE_KEY
         else:
             cache_key = self.cache_key
 
