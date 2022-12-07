@@ -496,10 +496,11 @@ class Network:
             stats = pickle.dumps(stats)
             stats_f.write(stats)
             
-    def train(self, epochs, batch_size):
+    def train(self, epochs, batch_size, checkpoint_sched=lambda epoch, loss, vloss: False):
         '''
             * epochs: number of total epochs (effective number of epochs executed: epochs - self.next_training_epoch + 1)
             * batch_size: for training
+            * checkpoint_sched: decide whether to create a checkpoint, after the end of an epoch
         '''
 
         if self.full_network is None:
@@ -563,9 +564,9 @@ class Network:
             tf.print(f"\nValidation w-h loss:             {_to_output_v(val_loss_wh)}")
             tf.print(f"\n===================================================================================================================\n")
 
-        try:
+        for epoch in range(self.next_training_epoch, epochs, 1):
 
-            for epoch in range(self.next_training_epoch, epochs, 1):
+            try:
                 
                 new_lr = self.lr_scheduler(epoch, self.full_network.optimizer.learning_rate)
                 self.full_network.optimizer.learning_rate = new_lr
@@ -679,44 +680,57 @@ class Network:
                     val_loss_xy += xy_
                     val_loss_wh += wh_
 
-                _log_show_losses()
-
-            if self.next_training_epoch >= epochs:
-                tf.print(f"Model with key {self.cache_key} (idx {self.cache_idx}) is already trained (at least) {epochs} epochs.")
-
-            else:
-                tf.print(f"\nTraining for model with key {self.cache_key} (idx {self.cache_idx}) is done ({epochs} epochs).")
+            except KeyboardInterrupt:
 
                 if self.cache_key is not None:
-                    self._save_model(epochs)
+                    tf.print(f"Training paused for model with key {self.cache_key} (idx {self.cache_idx}) at epoch {epoch}")
+
+                    self._save_model(epoch)
+
+                    # NOTE 
+                    # if the interrupt is generated in the middle of _log_show_losses (which is not atomic),
+                    # stats may become broken, so we make sure this does not happen
+
+                    stats = [train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj,
+                            train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh,
+                            validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj,
+                            validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh]
+
+                    self._save_train_stats(stats)
+
+                else:
+                    tf.print("Training interrupted; there is no cache key so the intermediary model will not be saved.")
+
+                return
+
+            _log_show_losses()
+
+            if self.cache_key is not None and checkpoint_sched(epoch, sum_loss, val_loss):
+
+                self._save_model(epoch + 1)
 
                 stats = [train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj,
-                        train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh,
-                        validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj,
-                        validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh]
+                            train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh,
+                            validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj,
+                            validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh]
 
                 self._save_train_stats(stats)
-        
-        except KeyboardInterrupt:
+
+        if self.next_training_epoch >= epochs:
+            tf.print(f"Model with key {self.cache_key} (idx {self.cache_idx}) is already trained (at least) {epochs} epochs.")
+
+        else:
+            tf.print(f"\nTraining for model with key {self.cache_key} (idx {self.cache_idx}) is done ({epochs} epochs).")
 
             if self.cache_key is not None:
-                tf.print(f"Training paused for model with key {self.cache_key} (idx {self.cache_idx}) at epoch {epoch}")
+                self._save_model(epochs)
 
-                self._save_model(epoch)
+            stats = [train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj,
+                    train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh,
+                    validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj,
+                    validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh]
 
-                # NOTE 
-                # if the interrupt is generated in the middle of _log_show_losses (which is not atomic),
-                # stats may become broken, so we make sure this does not happen
-
-                stats = [train_loss_stats[:epoch], train_loss_stats_noobj[:epoch], train_loss_stats_obj[:epoch],
-                        train_loss_stats_cl[:epoch], train_loss_stats_xy[:epoch], train_loss_stats_wh[:epoch],
-                        validation_loss_stats[:epoch], validation_loss_stats_noobj[:epoch], validation_loss_stats_obj[:epoch],
-                        validation_loss_stats_cl[:epoch], validation_loss_stats_xy[:epoch], validation_loss_stats_wh[:epoch]]
-
-                self._save_train_stats(stats)
-
-            else:
-                tf.print("Training interrupted; there is no cache key so the intermediary model will not be saved.")
+            self._save_train_stats(stats)
 
     def show_architecture_stats(self):
 
