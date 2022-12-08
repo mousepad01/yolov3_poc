@@ -12,9 +12,7 @@ from utils import *
 
 class DataLoader:
     '''
-        NOTE:
-            * adapted for object detection with single-label classification (for simplicity)
-            * uses only a subset from the entire COCO dataset
+        NOTE: implementation adapted for object detection with single-label classification (for simplicity)
     '''
 
     def __init__(self, train_data_path=TRAIN_DATA_PATH,
@@ -313,7 +311,7 @@ class DataLoader:
             if self.used_categories == {}:
                 for categ in info["categories"]:
 
-                    if (categ["supercategory"] not in self.classes) and \
+                    if (categ["name"] not in self.classes) and \
                         (categ["supercategory"] not in self.superclasses):
 
                         continue

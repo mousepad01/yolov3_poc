@@ -464,7 +464,7 @@ class Network:
             return
 
         TRAIN_BATCH_SIZE = batch_size
-        VALIDATION_BATCH_SIZE = DATA_LOAD_BATCH_SIZE
+        VALIDATION_BATCH_SIZE = 1
 
         TRAIN_IMG_CNT = self.data_loader.get_img_cnt("train")
         VALIDATION_IMG_CNT = self.data_loader.get_img_cnt("validation")

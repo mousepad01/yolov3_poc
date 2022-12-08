@@ -192,9 +192,9 @@ def main():
     def _run_training():
 
         data_loader = DataLoader(cache_key="base")
-        data_loader.load_info()
-        data_loader.determine_anchors()
-        data_loader.assign_anchors_to_objects()
+        #data_loader.load_info()
+        #data_loader.determine_anchors()
+        #data_loader.assign_anchors_to_objects()
 
         def _lr_sched(epoch, lr):
 
@@ -208,7 +208,7 @@ def main():
                 return 1e-5
 
         model = Network(data_loader, cache_idx="full2")
-        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(1e-3), lr_scheduler=_lr_sched)
+        #model.build_components(backbone="small", optimizer=tf.optimizers.Adam(1e-3), lr_scheduler=_lr_sched)
         
         def _checkpoint_sched(epoch, loss, vloss):
 
@@ -217,7 +217,7 @@ def main():
 
             return False
 
-        model.train(160, 32, _checkpoint_sched)
+        #model.train(160, 32, _checkpoint_sched)
         model.plot_train_stats(show_on_screen=True, save_image=False)
 
     #_test_mask_encoding()
