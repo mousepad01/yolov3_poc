@@ -95,6 +95,16 @@ class DataLoader:
             * the cache key is also used for model saving/loading, if opted for it when declaring the model
         '''
 
+        self._permanent_data = {"train": {}, "validation": {}}
+        '''
+            self._permanent_data[purpose][img_id] = img entry ready2use w/o loading
+        '''
+
+        self._permanent_gt = {"train": {}, "validation": {}}
+        '''
+            self._permanent_gt[purpose][gt batch idx] = gt batch ready2use w/o loading
+        '''
+
     def get_img_cnt(self, purpose):
 
         if purpose == "train":
@@ -132,6 +142,46 @@ class DataLoader:
 
         return tf.convert_to_tensor(cv.resize(img, IMG_SIZE))
 
+    def _get_img(self, img_id, purpose):
+
+        if img_id in self._permanent_data[purpose].keys():
+            return self._permanent_data[purpose][img_id]
+
+        else:
+
+            img = cv.imread(self.data_path[purpose] + self.imgs[purpose][img_id]["filename"])
+            img = self.resize_with_pad(img)
+
+            if len(self._permanent_data[purpose]) < PERMANENT_DATA_ENTRIES:
+                self._permanent_data[purpose][img_id] = img
+
+            return img
+
+    def _get_gt_batch(self, gt_batch_idx, purpose):
+
+        if gt_batch_idx in self._permanent_gt[purpose].keys():
+            return self._permanent_gt[purpose][gt_batch_idx]
+
+        else:
+
+            if self.cache_key is None:
+                cache_key = TMP_CACHE_KEY
+            else:
+                cache_key = self.cache_key
+
+            with open(f"{DATA_CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                raw_cache = cache_f.read()
+            bool_masks = pickle.loads(raw_cache)
+
+            with open(f"{DATA_CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                raw_cache = cache_f.read()
+            target_masks = pickle.loads(raw_cache)
+
+            if len(self._permanent_gt[purpose]) < PERMANENT_GT_BATCHES:
+                self._permanent_gt[purpose][gt_batch_idx] = (bool_masks, target_masks)
+
+            return (bool_masks, target_masks)
+
     def load_images(self, purpose):
         '''
             generator, for lazy loading
@@ -146,10 +196,7 @@ class DataLoader:
         current_loaded = []
         for img_id in self.imgs[purpose].keys():
 
-            img = cv.imread(self.data_path[purpose] + self.imgs[purpose][img_id]["filename"])
-            img = self.resize_with_pad(img)
-
-            current_loaded.append(img)
+            current_loaded.append(self._get_img(img_id, purpose))
 
             if len(current_loaded) == DATA_LOAD_BATCH_SIZE:
 
@@ -166,12 +213,7 @@ class DataLoader:
     def load_gt(self, purpose):
         '''
             loads ground truth for each image batch
-        '''
-
-        if self.cache_key is None:
-            cache_key = TMP_CACHE_KEY
-        else:
-            cache_key = self.cache_key
+        '''    
 
         IMG_CNT = self.get_img_cnt(purpose)
         GT_BATCH_CNT = IMG_CNT // GT_LOAD_BATCH_SIZE
@@ -182,13 +224,7 @@ class DataLoader:
 
         for gt_batch_idx in range(GT_BATCH_CNT):
 
-            with open(f"{DATA_CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
-                raw_cache = cache_f.read()
-            bool_masks = pickle.loads(raw_cache)
-
-            with open(f"{DATA_CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
-                raw_cache = cache_f.read()
-            target_masks = pickle.loads(raw_cache)
+            bool_masks, target_masks = self._get_gt_batch(gt_batch_idx, purpose)
 
             for local_slice_idx in range(DATA_BATCH_PER_GT_BATCH):
                 slice_idx = local_slice_idx * DATA_LOAD_BATCH_SIZE
@@ -207,13 +243,7 @@ class DataLoader:
             else:
                 gt_batch_idx += 1
 
-            with open(f"{DATA_CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
-                raw_cache = cache_f.read()
-            bool_masks = pickle.loads(raw_cache)
-
-            with open(f"{DATA_CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
-                raw_cache = cache_f.read()
-            target_masks = pickle.loads(raw_cache)
+            bool_masks, target_masks = self._get_gt_batch(gt_batch_idx, purpose)
 
             rem = IMG_CNT % GT_LOAD_BATCH_SIZE
 

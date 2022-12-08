@@ -35,6 +35,21 @@ GT_LOAD_BATCH_SIZE = 1024
 assert(GT_LOAD_BATCH_SIZE % DATA_LOAD_BATCH_SIZE == 0)
 assert(GT_LOAD_BATCH_SIZE >= DATA_LOAD_BATCH_SIZE)
 
+PERMANENT_DATA_BATCHES = 10000000000
+'''
+    how many data batches to permanently store in memory (and be loaded only once)
+'''
+
+PERMANENT_DATA_ENTRIES = PERMANENT_DATA_BATCHES * DATA_LOAD_BATCH_SIZE
+'''
+    how many data entries to permanently store in memory (and be loaded only once)
+'''
+
+PERMANENT_GT_BATCHES = 10000000000
+'''
+    how many gt entries to permanently store in memory (and be loaded only once)
+'''
+
 IMG_SIZE = (416, 416)
 '''
     fixed image input size
