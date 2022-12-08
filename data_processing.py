@@ -87,22 +87,9 @@ class DataLoader:
             * cacheable
         '''
 
-        self.cache_key = cache_key
+        self.cache_manager = DataCacheManager(self, cache_key)
         '''
-            * determining anchors and assigning them to each bounding box can be done only once for a specific dataset
-                * if cache_key is given and there is such cache, it upload data cached under this key when specific operations are called; 
-                * if cache_key is given but there is no such cache, it will create it;
-            * the cache key is also used for model saving/loading, if opted for it when declaring the model
-        '''
-
-        self._permanent_data = {"train": {}, "validation": {}}
-        '''
-            self._permanent_data[purpose][img_id] = img entry ready2use w/o loading
-        '''
-
-        self._permanent_gt = {"train": {}, "validation": {}}
-        '''
-            self._permanent_gt[purpose][gt batch idx] = gt batch ready2use w/o loading
+            the cache manager
         '''
 
     def get_img_cnt(self, purpose):
@@ -112,75 +99,6 @@ class DataLoader:
 
         elif purpose == "validation":
             return len(self.imgs["validation"])
-
-    def resize_with_pad(self, img):
-        '''
-            returns resized image with black symmetrical padding
-        '''
-
-        w, h = img.shape[0], img.shape[1]
-
-        if w < h:
-
-            q1 = (h - w) // 2
-            q2 = h - w - q1
-
-            padl = np.zeros((q1, h, 3), dtype=np.uint8)
-            padr = np.zeros((q2, h, 3), dtype=np.uint8)
-        
-            img = np.concatenate([padl, img, padr], 0)
-
-        elif h < w:
-
-            q1 = (w - h) // 2
-            q2 = w - h - q1
-
-            padl = np.zeros((w, q1, 3), dtype=np.uint8)
-            padr = np.zeros((w, q2, 3), dtype=np.uint8)
-
-            img = np.concatenate([padl, img, padr], 1)
-
-        return tf.convert_to_tensor(cv.resize(img, IMG_SIZE))
-
-    def _get_img(self, img_id, purpose):
-
-        if img_id in self._permanent_data[purpose].keys():
-            return self._permanent_data[purpose][img_id]
-
-        else:
-
-            img = cv.imread(self.data_path[purpose] + self.imgs[purpose][img_id]["filename"])
-            img = self.resize_with_pad(img)
-
-            if len(self._permanent_data[purpose]) < PERMANENT_DATA_ENTRIES:
-                self._permanent_data[purpose][img_id] = img
-
-            return img
-
-    def _get_gt_batch(self, gt_batch_idx, purpose):
-
-        if gt_batch_idx in self._permanent_gt[purpose].keys():
-            return self._permanent_gt[purpose][gt_batch_idx]
-
-        else:
-
-            if self.cache_key is None:
-                cache_key = TMP_CACHE_KEY
-            else:
-                cache_key = self.cache_key
-
-            with open(f"{DATA_CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
-                raw_cache = cache_f.read()
-            bool_masks = pickle.loads(raw_cache)
-
-            with open(f"{DATA_CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
-                raw_cache = cache_f.read()
-            target_masks = pickle.loads(raw_cache)
-
-            if len(self._permanent_gt[purpose]) < PERMANENT_GT_BATCHES:
-                self._permanent_gt[purpose][gt_batch_idx] = (bool_masks, target_masks)
-
-            return (bool_masks, target_masks)
 
     def load_images(self, purpose):
         '''
@@ -196,7 +114,7 @@ class DataLoader:
         current_loaded = []
         for img_id in self.imgs[purpose].keys():
 
-            current_loaded.append(self._get_img(img_id, purpose))
+            current_loaded.append(self.cache_manager.get_img(img_id, purpose))
 
             if len(current_loaded) == DATA_LOAD_BATCH_SIZE:
 
@@ -224,7 +142,7 @@ class DataLoader:
 
         for gt_batch_idx in range(GT_BATCH_CNT):
 
-            bool_masks, target_masks = self._get_gt_batch(gt_batch_idx, purpose)
+            bool_masks, target_masks = self.cache_manager.get_gt_batch(gt_batch_idx, purpose)
 
             for local_slice_idx in range(DATA_BATCH_PER_GT_BATCH):
                 slice_idx = local_slice_idx * DATA_LOAD_BATCH_SIZE
@@ -243,7 +161,7 @@ class DataLoader:
             else:
                 gt_batch_idx += 1
 
-            bool_masks, target_masks = self._get_gt_batch(gt_batch_idx, purpose)
+            bool_masks, target_masks = self.cache_manager.get_gt_batch(gt_batch_idx, purpose)
 
             rem = IMG_CNT % GT_LOAD_BATCH_SIZE
 
@@ -417,30 +335,14 @@ class DataLoader:
             tf.print("info not yet loaded")
             quit()
 
-        if self.cache_key is not None:
-
-            try:
-                
-                with open(f"{DATA_CACHE_PATH}{self.cache_key}_anchors.bin", "rb") as cache_f:
-                    raw_cache = cache_f.read()
-
-                self.anchors = pickle.loads(raw_cache)
-
-                tf.print("Cache found. Anchors loaded")
-                return
-
-            except FileNotFoundError:
-                tf.print("Cache not found. Operations will be fully executed and a new cache will be created")
+        self.cache_manager.get_anchors()
+        if self.anchors:
+            return
 
         anchor_finder = AnchorFinder(self.imgs)
         self.anchors = tf.cast(tf.convert_to_tensor(anchor_finder.get_anchors()), tf.int32)
 
-        if self.cache_key is not None:
-
-            new_cache = pickle.dumps(self.anchors)
-
-            with open(f"{DATA_CACHE_PATH}{self.cache_key}_anchors.bin", "wb+") as cache_f:
-                cache_f.write(new_cache)
+        self.cache_manager.store_anchors()
 
     def assign_anchors_to_objects(self):
 
@@ -452,40 +354,8 @@ class DataLoader:
             tf.print("anchors not yet determined")
             quit()
 
-        if self.cache_key is not None:
-
-            try:
-
-                for purpose in ["train", "validation"]:
-                    
-                    IMG_CNT = self.get_img_cnt(purpose)
-                    GT_BATCH_CNT = IMG_CNT // GT_LOAD_BATCH_SIZE
-                    if IMG_CNT % GT_LOAD_BATCH_SIZE > 0:
-                        GT_BATCH_CNT += 1
-
-                    for gt_batch_idx in range(GT_BATCH_CNT):
-
-                        with open(f"{DATA_CACHE_PATH}{self.cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
-                            pass
-
-                        with open(f"{DATA_CACHE_PATH}{self.cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
-                            pass
-
-                tf.print("Cache found for ground truth masks. It will be loaded when needed")
-                return
-
-            except FileNotFoundError:
-                tf.print("Cache not found. Operations will be fully executed and a new cache will be created")
-
-        '''
-            if the cache key is none, these values will not be stored for another round
-            still, they need to (at least temporarily) reside on the disk
-            so, we create a fake cache under FAKE_CACHE_KEY
-        '''
-        if self.cache_key is None:
-            cache_key = TMP_CACHE_KEY
-        else:
-            cache_key = self.cache_key
+        if self.cache_manager.check_gt():
+            return
 
         def _iou(anchor, w, h):
             
@@ -496,23 +366,6 @@ class DataLoader:
             union = w * h + anchor[0] * anchor[1] - intersection
 
             return intersection / union
-
-        def _store_gt(bool_anchor_masks, target_anchor_masks, purpose, gt_batch_idx):
-
-            for d in range(SCALE_CNT):
-
-                bool_anchor_masks[d] = tf.convert_to_tensor(bool_anchor_masks[d], dtype=tf.float32)
-                target_anchor_masks[d] = tf.convert_to_tensor(target_anchor_masks[d], dtype=tf.float32)
-
-            new_cache = pickle.dumps(bool_anchor_masks)
-
-            with open(f"{DATA_CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
-                cache_f.write(new_cache)
-
-            new_cache = pickle.dumps(target_anchor_masks)
-
-            with open(f"{DATA_CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
-                cache_f.write(new_cache)
 
         for purpose in ["train", "validation"]:
             
@@ -597,11 +450,184 @@ class DataLoader:
 
                 if len(bool_anchor_masks[0]) == GT_LOAD_BATCH_SIZE:
 
-                    _store_gt(bool_anchor_masks, target_anchor_masks, purpose, gt_batch_idx)
+                    self.cache_manager.store_gt(bool_anchor_masks, target_anchor_masks, purpose, gt_batch_idx)
 
                     bool_anchor_masks = [[] for _ in range(SCALE_CNT)]
                     target_anchor_masks = [[] for _ in range(SCALE_CNT)]
                     gt_batch_idx += 1
 
             if len(bool_anchor_masks[0]) > 0:
-                _store_gt(bool_anchor_masks, target_anchor_masks, purpose, gt_batch_idx)
+                self.cache_manager.store_gt(bool_anchor_masks, target_anchor_masks, purpose, gt_batch_idx)
+
+class DataCacheManager:
+
+    def __init__(self, loader: DataLoader, cache_key):
+
+        self.loader = loader
+        '''
+            the data_loader object which calls the constructor
+        '''
+
+        self.cache_key = cache_key
+        '''
+            * determining anchors and assigning them to each bounding box can be done only once for a specific dataset
+                * if cache_key is given and there is such cache, it upload data cached under this key when specific operations are called; 
+                * if cache_key is given but there is no such cache, it will create it;
+            * the cache key is also used for model saving/loading, if opted for it when declaring the model
+        '''
+
+        self._permanent_data = {"train": {}, "validation": {}}
+        '''
+            self._permanent_data[purpose][img_id] = img entry ready2use w/o loading
+        '''
+
+        self._permanent_gt = {"train": {}, "validation": {}}
+        '''
+            self._permanent_gt[purpose][gt batch idx] = gt batch ready2use w/o loading
+        '''
+    
+    def get_anchors(self):
+
+        if self.cache_key is not None:
+
+            try:
+                
+                with open(f"{DATA_CACHE_PATH}{self.cache_key}_anchors.bin", "rb") as cache_f:
+                    raw_cache = cache_f.read()
+
+                self.loader.anchors = pickle.loads(raw_cache)
+
+                tf.print("Cache found. Anchors loaded.")
+
+            except FileNotFoundError:
+                tf.print("Cache not found. Operations will be fully executed and a new cache will be created.")
+    
+    def store_anchors(self):
+
+        if self.cache_key is not None:
+
+            new_cache = pickle.dumps(self.loader.anchors)
+
+            with open(f"{DATA_CACHE_PATH}{self.cache_key}_anchors.bin", "wb+") as cache_f:
+                cache_f.write(new_cache)
+
+    def resize_with_pad(self, img):
+        '''
+            returns resized image with black symmetrical padding
+        '''
+
+        w, h = img.shape[0], img.shape[1]
+
+        if w < h:
+
+            q1 = (h - w) // 2
+            q2 = h - w - q1
+
+            padl = np.zeros((q1, h, 3), dtype=np.uint8)
+            padr = np.zeros((q2, h, 3), dtype=np.uint8)
+        
+            img = np.concatenate([padl, img, padr], 0)
+
+        elif h < w:
+
+            q1 = (w - h) // 2
+            q2 = w - h - q1
+
+            padl = np.zeros((w, q1, 3), dtype=np.uint8)
+            padr = np.zeros((w, q2, 3), dtype=np.uint8)
+
+            img = np.concatenate([padl, img, padr], 1)
+
+        return tf.convert_to_tensor(cv.resize(img, IMG_SIZE))
+
+    def get_img(self, img_id, purpose):
+
+        if img_id in self._permanent_data[purpose].keys():
+            return self._permanent_data[purpose][img_id]
+
+        else:
+
+            img = cv.imread(self.loader.data_path[purpose] + self.loader.imgs[purpose][img_id]["filename"])
+            img = self.resize_with_pad(img)
+
+            if len(self._permanent_data[purpose]) < PERMANENT_DATA_ENTRIES:
+                self._permanent_data[purpose][img_id] = img
+
+            return img
+
+    def get_gt_batch(self, gt_batch_idx, purpose):
+
+        if gt_batch_idx in self._permanent_gt[purpose].keys():
+            return self._permanent_gt[purpose][gt_batch_idx]
+
+        else:
+
+            if self.cache_key is None:
+                cache_key = TMP_CACHE_KEY
+            else:
+                cache_key = self.cache_key
+
+            with open(f"{DATA_CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                raw_cache = cache_f.read()
+            bool_masks = pickle.loads(raw_cache)
+
+            with open(f"{DATA_CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                raw_cache = cache_f.read()
+            target_masks = pickle.loads(raw_cache)
+
+            if len(self._permanent_gt[purpose]) < PERMANENT_GT_BATCHES:
+                self._permanent_gt[purpose][gt_batch_idx] = (bool_masks, target_masks)
+
+            return (bool_masks, target_masks)
+
+    def check_gt(self):
+
+        if self.cache_key is not None:
+
+            try:
+
+                for purpose in ["train", "validation"]:
+                    
+                    IMG_CNT = self.get_img_cnt(purpose)
+                    GT_BATCH_CNT = IMG_CNT // GT_LOAD_BATCH_SIZE
+                    if IMG_CNT % GT_LOAD_BATCH_SIZE > 0:
+                        GT_BATCH_CNT += 1
+
+                    for gt_batch_idx in range(GT_BATCH_CNT):
+
+                        with open(f"{DATA_CACHE_PATH}{self.cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                            pass
+
+                        with open(f"{DATA_CACHE_PATH}{self.cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                            pass
+
+                tf.print("Cache found for ground truth masks. It will be loaded when needed")
+                return True
+
+            except FileNotFoundError:
+                tf.print("Cache not found. Operations will be fully executed and a new cache will be created")
+                return False
+        
+        return False
+
+    def store_gt(self, bool_gt, target_gt, purpose, gt_batch_idx):
+
+        if self.cache_key is None:
+            cache_key = TMP_CACHE_KEY
+        else:
+            cache_key = self.cache_key
+
+        for d in range(SCALE_CNT):
+
+            bool_gt[d] = tf.convert_to_tensor(bool_gt[d], dtype=tf.float32)
+            target_gt[d] = tf.convert_to_tensor(target_gt[d], dtype=tf.float32)
+
+        new_cache = pickle.dumps(bool_gt)
+
+        with open(f"{DATA_CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
+            cache_f.write(new_cache)
+
+        new_cache = pickle.dumps(target_gt)
+
+        with open(f"{DATA_CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
+            cache_f.write(new_cache)
