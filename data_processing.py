@@ -23,6 +23,8 @@ class DataLoader:
                         validation_info_path=VALIDATION_INFO_PATH,
 
                         cache_key=None,
+                        superclasses=["food"],
+                        classes=[]
                     ):
 
         assert(cache_key != TMP_CACHE_KEY)
@@ -43,6 +45,16 @@ class DataLoader:
                                                             "supercategory": supercateg (name / id ????),
                                                             "onehot": one hot index
                                                         }
+        '''
+
+        self.classes = classes
+        '''
+            to specify a data subset at load_info()
+        '''
+
+        self.superclasses = superclasses
+        '''
+            to specify a data subset at load_info()
         '''
 
         self.onehot_to_name = {}
@@ -301,7 +313,9 @@ class DataLoader:
             if self.used_categories == {}:
                 for categ in info["categories"]:
 
-                    if categ["supercategory"] != "food":
+                    if (categ["supercategory"] not in self.classes) and \
+                        (categ["supercategory"] not in self.superclasses):
+
                         continue
 
                     self.used_categories[categ["id"]] = {

@@ -207,7 +207,7 @@ def main():
             else:
                 return 1e-5
 
-        model = Network(data_loader, cache_idx="full")
+        model = Network(data_loader, cache_idx="full2")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(1e-3), lr_scheduler=_lr_sched)
         
         def _checkpoint_sched(epoch, loss, vloss):
