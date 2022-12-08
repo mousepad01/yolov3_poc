@@ -352,46 +352,52 @@ class Network:
         _, ax = plt.subplots(3, 2)
 
         ax[0][0].plot([idx for idx in range(len(train_loss_stats))],
-                        train_loss_stats)
+                        train_loss_stats, label="train")
         ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
-                        validation_loss_stats)
+                        validation_loss_stats, label="val")
         ax[0][0].grid(True)
         ax[0][0].set_title("total loss")
+        ax[0][0].legend()
 
         ax[0][1].plot([idx for idx in range(len(train_loss_stats))],
-                        train_loss_stats_noobj)
+                        train_loss_stats_noobj, label="train")
         ax[0][1].plot([idx for idx in range(len(validation_loss_stats))],
-                        validation_loss_stats_noobj)
+                        validation_loss_stats_noobj, label="val")
         ax[0][1].grid(True)
         ax[0][1].set_title("(no-)objectness loss")
+        ax[0][1].legend()
 
         ax[1][0].plot([idx for idx in range(len(train_loss_stats))],
-                        train_loss_stats_obj)
+                        train_loss_stats_obj, label="train")
         ax[1][0].plot([idx for idx in range(len(validation_loss_stats))],
-                        validation_loss_stats_obj)
+                        validation_loss_stats_obj, label="val")
         ax[1][0].grid(True)
         ax[1][0].set_title("objectness loss")
+        ax[1][0].legend()
 
         ax[1][1].plot([idx for idx in range(len(train_loss_stats))],
-                        train_loss_stats_cl)
+                        train_loss_stats_cl, label="train")
         ax[1][1].plot([idx for idx in range(len(validation_loss_stats))],
-                        validation_loss_stats_cl)
+                        validation_loss_stats_cl, label="val")
         ax[1][1].grid(True)
         ax[1][1].set_title("classification loss")
+        ax[1][1].legend()
 
         ax[2][0].plot([idx for idx in range(len(train_loss_stats))],
-                        train_loss_stats_xy)
+                        train_loss_stats_xy, label="train")
         ax[2][0].plot([idx for idx in range(len(validation_loss_stats))],
-                        validation_loss_stats_xy)
+                        validation_loss_stats_xy, label="val")
         ax[2][0].grid(True)
         ax[2][0].set_title("x-y loss")
+        ax[2][0].legend()
 
         ax[2][1].plot([idx for idx in range(len(train_loss_stats))],
-                        train_loss_stats_wh)
+                        train_loss_stats_wh, label="train")
         ax[2][1].plot([idx for idx in range(len(validation_loss_stats))],
-                        validation_loss_stats_wh)
+                        validation_loss_stats_wh, label="val")
         ax[2][1].grid(True)
         ax[2][1].set_title("w-h loss")
+        ax[2][1].legend()
 
         if save_image:
             plt.savefig(f"{TRAIN_STATS_PATH}{cache_key}_{cache_idx}_stats_plot")
