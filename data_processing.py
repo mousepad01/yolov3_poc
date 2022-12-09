@@ -100,6 +100,9 @@ class DataLoader:
         elif purpose == "validation":
             return len(self.imgs["validation"])
 
+    def get_class_cnt(self):
+        return len(self.used_categories)
+
     def load_images(self, purpose):
         '''
             generator, for lazy loading
@@ -329,6 +332,8 @@ class DataLoader:
 
                 self.imgs[purpose][img_info["id"]]["objs"] = bbox_d_ok
 
+        tf.print(f"Loaded {self.get_img_cnt('train')} train images and {self.get_img_cnt('validation')} validation images.")
+
     def determine_anchors(self):
 
         if self.used_categories == {}:
@@ -336,7 +341,7 @@ class DataLoader:
             quit()
 
         self.cache_manager.get_anchors()
-        if self.anchors:
+        if self.anchors != []:
             return
 
         anchor_finder = AnchorFinder(self.imgs)
@@ -588,7 +593,7 @@ class DataCacheManager:
 
                 for purpose in ["train", "validation"]:
                     
-                    IMG_CNT = self.get_img_cnt(purpose)
+                    IMG_CNT = self.loader.get_img_cnt(purpose)
                     GT_BATCH_CNT = IMG_CNT // GT_LOAD_BATCH_SIZE
                     if IMG_CNT % GT_LOAD_BATCH_SIZE > 0:
                         GT_BATCH_CNT += 1

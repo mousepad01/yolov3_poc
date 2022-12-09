@@ -6,7 +6,6 @@ import pickle
 from custom_keras import *
 from utils import *
 from loss import *
-
 from predictions import *
 from data_processing import *
 
@@ -70,12 +69,12 @@ class Network:
         self.lr_scheduler = lr_scheduler
 
         self.cache_manager.get_model()
-        if self.full_network:
+        if self.full_network is not None:
             return
 
         tf.print("Building a new model...")
 
-        CLASS_COUNT = len(self.data_loader.used_categories)
+        CLASS_COUNT = self.data_loader.get_class_cnt()
 
         if backbone == "darknet-53":
         
@@ -274,7 +273,7 @@ class Network:
         if show_on_screen:
             plt.show()
       
-    def train(self, epochs, batch_size, checkpoint_sched=lambda epoch, loss, vloss: False):
+    def train(self, epochs, batch_size, progbar=True, checkpoint_sched=lambda epoch, loss, vloss: False):
         '''
             * epochs: number of total epochs (effective number of epochs executed: epochs - self.next_training_epoch + 1)
             * batch_size: for training
@@ -349,7 +348,8 @@ class Network:
                 new_lr = self.lr_scheduler(epoch, self.full_network.optimizer.learning_rate)
                 self.full_network.optimizer.learning_rate = new_lr
 
-                progbar_output = tf.keras.utils.Progbar(TRAIN_BATCH_CNT)
+                if progbar:
+                    progbar_output = tf.keras.utils.Progbar(TRAIN_BATCH_CNT)
                 tf.print(f"\nEpoch {epoch} (lr {new_lr}):")
 
                 # loss stats variables
@@ -415,7 +415,8 @@ class Network:
                     self.full_network.optimizer.apply_gradients(zip(gradients, self.full_network.trainable_weights))
 
                     batch_idx += 1
-                    progbar_output.update(batch_idx)
+                    if progbar:
+                        progbar_output.update(batch_idx)
 
                     sum_loss += loss_value
                     sum_loss_noobj += noobj

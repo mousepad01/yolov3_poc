@@ -8,14 +8,11 @@ from model import *
 
 print("NOTE: this implementation relies on the fact that dictionaries are ORDERED. yielding keys in a nedeterministic order breaks everything")
 
-print("? TODO: use tf.data.Dataset")
-print("TODO refactor code")
-
 def main():
 
     def _test_mask_encoding():
 
-        data_loader = DataLoader(cache_key="base")
+        data_loader = DataLoader(cache_key="zebra_bottle_keyboard", classes=["zebra", "bottle", "keyboard"], superclasses=[])
         data_loader.load_info()
         data_loader.determine_anchors()
         data_loader.assign_anchors_to_objects()
@@ -25,46 +22,48 @@ def main():
             for imgid in data_loader.imgs["train"].keys():
                 yield imgid
 
-        img_keys = _get_imgid()
-        for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_loader.load_data(4, "train"):
+        for _ in range(1):
 
-            img_keys_ = []
-            for _ in range(imgs.shape[0]):
-                img_keys_.append(next(img_keys))
+            img_keys = _get_imgid()
+            for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_loader.load_data(4, "train"):
 
-            bool_anchor_masks = [bool_mask_size1, bool_mask_size2, bool_mask_size3]
-            target_anchor_masks = [target_mask_size1, target_mask_size2, target_mask_size3]
+                img_keys_ = []
+                for _ in range(imgs.shape[0]):
+                    img_keys_.append(next(img_keys))
 
-            output_from_mask = [None for _ in range(SCALE_CNT)]
-            for d in range(SCALE_CNT):
+                bool_anchor_masks = [bool_mask_size1, bool_mask_size2, bool_mask_size3]
+                target_anchor_masks = [target_mask_size1, target_mask_size2, target_mask_size3]
 
-                B, S, A = target_anchor_masks[d].shape[0], target_anchor_masks[d].shape[1], target_anchor_masks[d].shape[3]
-                tx_ty = target_anchor_masks[d][..., 0:2] * bool_anchor_masks[d]
-                tw_th = target_anchor_masks[d][..., 2:4] * bool_anchor_masks[d]
-                to = tf.cast(tf.fill((B, S, S, A, 1), value=10.0), dtype=tf.float32) * bool_anchor_masks[d] + \
-                        tf.cast(tf.fill((B, S, S, A, 1), value=-10.0), dtype=tf.float32) * (1 - bool_anchor_masks[d])
-                probabilities = target_anchor_masks[d][..., 4:] * 10
-                output_from_mask[d] = tf.concat([tx_ty, tw_th, to, probabilities], axis=-1) 
+                output_from_mask = [None for _ in range(SCALE_CNT)]
+                for d in range(SCALE_CNT):
 
-            anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_loader.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
+                    B, S, A = target_anchor_masks[d].shape[0], target_anchor_masks[d].shape[1], target_anchor_masks[d].shape[3]
+                    tx_ty = target_anchor_masks[d][..., 0:2] * bool_anchor_masks[d]
+                    tw_th = target_anchor_masks[d][..., 2:4] * bool_anchor_masks[d]
+                    to = tf.cast(tf.fill((B, S, S, A, 1), value=10.0), dtype=tf.float32) * bool_anchor_masks[d] + \
+                            tf.cast(tf.fill((B, S, S, A, 1), value=-10.0), dtype=tf.float32) * (1 - bool_anchor_masks[d])
+                    probabilities = target_anchor_masks[d][..., 4:] * 10
+                    output_from_mask[d] = tf.concat([tx_ty, tw_th, to, probabilities], axis=-1) 
 
-            cnt_ = 0
-            for img_id in img_keys_:
-                
-                print(img_id)
-                cnt_ += 1
+                anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_loader.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
 
-                img = cv.imread(data_loader.data_path["train"] + data_loader.imgs["train"][img_id]["filename"])
-                img = data_loader.resize_with_pad(img)
+                cnt_ = 0
+                for img_id in img_keys_:
+                    
+                    print(img_id)
+                    cnt_ += 1
 
-                output_perimg = [make_prediction_perscale(output_from_mask[d][cnt_ - 1: cnt_], anchors_relative[d], 0.6) for d in range(SCALE_CNT)]
-                show_prediction(img, [output_perimg[d][0] for d in range(SCALE_CNT)],
-                                        [output_perimg[d][1] for d in range(SCALE_CNT)],
-                                        [output_perimg[d][2] for d in range(SCALE_CNT)],
-                                        [output_perimg[d][3] for d in range(SCALE_CNT)],
-                                        
-                                data_loader.onehot_to_name,
-                                data_loader.imgs["train"][img_id]["objs"])
+                    img = cv.imread(data_loader.data_path["train"] + data_loader.imgs["train"][img_id]["filename"])
+                    img = data_loader.cache_manager.resize_with_pad(img)
+
+                    output_perimg = [make_prediction_perscale(output_from_mask[d][cnt_ - 1: cnt_], anchors_relative[d], 0.6) for d in range(SCALE_CNT)]
+                    show_prediction(img, [output_perimg[d][0] for d in range(SCALE_CNT)],
+                                            [output_perimg[d][1] for d in range(SCALE_CNT)],
+                                            [output_perimg[d][2] for d in range(SCALE_CNT)],
+                                            [output_perimg[d][3] for d in range(SCALE_CNT)],
+                                            
+                                    data_loader.onehot_to_name,
+                                    data_loader.imgs["train"][img_id]["objs"])
 
     def _test_learning_one_img():
 
@@ -191,7 +190,7 @@ def main():
 
     def _run_training():
 
-        data_loader = DataLoader(cache_key="base")
+        data_loader = DataLoader(cache_key="mouse_keyboard_tv_laptop", classes=["mouse", "keyboard", "tv", "laptop"], superclasses=[])
         data_loader.load_info()
         data_loader.determine_anchors()
         data_loader.assign_anchors_to_objects()
@@ -199,26 +198,32 @@ def main():
         def _lr_sched(epoch, lr):
 
             if epoch < 60:
-                return 1e-3
-
-            elif epoch < 90:
                 return 1e-4
 
-            else:
+            elif epoch < 90:
                 return 1e-5
 
-        model = Network(data_loader, cache_idx="full22")
-        model.build_components(backbone="small", optimizer=tf.optimizers.Adam(1e-3), lr_scheduler=_lr_sched)
+            else:
+                return 1e-6
+
+        model = Network(data_loader, cache_idx="mktl2")
+        model.build_components(backbone="small", optimizer=tf.optimizers.Adam(1e-4), lr_scheduler=_lr_sched)
         
         def _checkpoint_sched(epoch, loss, vloss):
 
-            if epoch % 3 == 0:
+            if epoch % 5 == 0:
                 return True
 
             return False
 
-        model.train(100, 32, _checkpoint_sched)
+        model.train(220, 32, _checkpoint_sched)
         #model.plot_train_stats(show_on_screen=True, save_image=False)
+
+    def _show_stats():
+
+        data_loader = DataLoader(cache_key="base")
+        model = Network(data_loader, cache_idx="full_newcoef")
+        model.plot_stats(show_on_screen=True, save_image=False)
 
     #_test_mask_encoding()
     #_test_learning_one_img()
@@ -226,7 +231,8 @@ def main():
     #_test_cache()
     #_test_train()
     #_test_learning_few_img()
-    _run_training()
+    #_run_training()
+    _show_stats()
     
 if __name__ == "__main__":
     main()
