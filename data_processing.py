@@ -207,15 +207,28 @@ class DataLoader:
 
             bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3 = next(gt_generator)
 
-            idx = 0
-            for idx in range(load_2_b - 1):
-                lo = idx * batch_size
-                hi = (idx + 1) * batch_size
+            if imgs.shape[0] == DATA_LOAD_BATCH_SIZE:
 
-                yield tf.cast(imgs[lo: hi], tf.float32) / 255.0, bool_mask_size1[lo: hi], target_mask_size1[lo: hi], bool_mask_size2[lo: hi], target_mask_size2[lo: hi], bool_mask_size3[lo: hi], target_mask_size3[lo: hi]
+                idx = 0
+                for idx in range(load_2_b):
+                    lo = idx * batch_size
+                    hi = (idx + 1) * batch_size
+
+                    yield (tf.cast(imgs[lo: hi], tf.float32) / 255.0) * 2.0 - 1.0, bool_mask_size1[lo: hi], target_mask_size1[lo: hi], bool_mask_size2[lo: hi], target_mask_size2[lo: hi], bool_mask_size3[lo: hi], target_mask_size3[lo: hi]
             
-            lo = (load_2_b - 1) * batch_size
-            yield tf.cast(imgs[lo:], tf.float32) / 255.0, bool_mask_size1[lo:], target_mask_size1[lo:], bool_mask_size2[lo:], target_mask_size2[lo:], bool_mask_size3[lo:], target_mask_size3[lo:]
+            else:
+
+                limit = imgs.shape[0] // batch_size
+
+                idx = 0
+                for idx in range(limit):
+                    lo = idx * batch_size
+                    hi = (idx + 1) * batch_size
+
+                    yield (tf.cast(imgs[lo: hi], tf.float32) / 255.0) * 2.0 - 1.0, bool_mask_size1[lo: hi], target_mask_size1[lo: hi], bool_mask_size2[lo: hi], target_mask_size2[lo: hi], bool_mask_size3[lo: hi], target_mask_size3[lo: hi]
+
+                lo = limit * batch_size
+                yield (tf.cast(imgs[lo:], tf.float32) / 255.0) * 2.0 - 1.0, bool_mask_size1[lo:], target_mask_size1[lo:], bool_mask_size2[lo:], target_mask_size2[lo:], bool_mask_size3[lo:], target_mask_size3[lo:]
 
     def load_info(self):
         '''

@@ -285,7 +285,7 @@ class Network:
             return
 
         TRAIN_BATCH_SIZE = batch_size
-        VALIDATION_BATCH_SIZE = 1
+        VALIDATION_BATCH_SIZE = batch_size
 
         TRAIN_IMG_CNT = self.data_loader.get_img_cnt("train")
         VALIDATION_IMG_CNT = self.data_loader.get_img_cnt("validation")
@@ -378,31 +378,10 @@ class Network:
                         out_s1, out_s2, out_s3 = self.full_network(imgs, training=True)
 
                         loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
-                        '''print(f"total loss = {loss_value}")
-                        print(f"no obj loss = {noobj}")
-                        print(f"obj loss = {obj}")
-                        print(f"classif loss = {cl}")
-                        print(f"xy loss = {xy}")
-                        print(f"wh loss = {wh}")
-                        print("\n")'''
 
                         loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
-                        '''print(f"total loss = {loss_value_}")
-                        print(f"no obj loss = {noobj_}")
-                        print(f"obj loss = {obj_}")
-                        print(f"classif loss = {cl_}")
-                        print(f"xy loss = {xy_}")
-                        print(f"wh loss = {wh_}")
-                        print("\n")'''                        
-                        
+
                         loss_value__, noobj__, obj__, cl__, xy__, wh__ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
-                        '''print(f"total loss = {loss_value_}")
-                        print(f"no obj loss = {noobj_}")
-                        print(f"obj loss = {obj_}")
-                        print(f"classif loss = {cl_}")
-                        print(f"xy loss = {xy_}")
-                        print(f"wh loss = {wh_}")
-                        print("\n")'''
 
                         loss_value += loss_value_ + loss_value__
                         noobj += noobj_ + noobj__

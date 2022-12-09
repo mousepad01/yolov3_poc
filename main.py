@@ -19,13 +19,13 @@ def main():
 
         # hack to get img ids
         def _get_imgid():
-            for imgid in data_loader.imgs["train"].keys():
+            for imgid in data_loader.imgs["validation"].keys():
                 yield imgid
 
         for _ in range(1):
 
             img_keys = _get_imgid()
-            for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_loader.load_data(4, "train"):
+            for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_loader.load_data(4, "validation"):
 
                 img_keys_ = []
                 for _ in range(imgs.shape[0]):
@@ -53,7 +53,7 @@ def main():
                     print(img_id)
                     cnt_ += 1
 
-                    img = cv.imread(data_loader.data_path["train"] + data_loader.imgs["train"][img_id]["filename"])
+                    img = cv.imread(data_loader.data_path["validation"] + data_loader.imgs["validation"][img_id]["filename"])
                     img = data_loader.cache_manager.resize_with_pad(img)
 
                     output_perimg = [make_prediction_perscale(output_from_mask[d][cnt_ - 1: cnt_], anchors_relative[d], 0.6) for d in range(SCALE_CNT)]
@@ -63,14 +63,14 @@ def main():
                                             [output_perimg[d][3] for d in range(SCALE_CNT)],
                                             
                                     data_loader.onehot_to_name,
-                                    data_loader.imgs["train"][img_id]["objs"])
+                                    data_loader.imgs["validation"][img_id]["objs"])
 
     def _test_learning_one_img():
 
         # BEFORE RUNNING: 
         # make sure training takes place only on the first img
 
-        data_loader = DataLoader(cache_key="base")
+        data_loader = DataLoader(cache_key="mouse_keyboard_tv_laptop", classes=["mouse", "keyboard", "tv", "laptop"], superclasses=[])
         data_loader.load_info()
         data_loader.determine_anchors()
         data_loader.assign_anchors_to_objects()
@@ -190,7 +190,8 @@ def main():
 
     def _run_training():
 
-        data_loader = DataLoader(cache_key="mouse_keyboard_tv_laptop", classes=["mouse", "keyboard", "tv", "laptop"], superclasses=[])
+        data_loader = DataLoader(cache_key="zebra_bottle_keyboard2", classes=["zebra", "bottle", "keyboard"], superclasses=[])
+        #data_loader = DataLoader(cache_key="base2")
         data_loader.load_info()
         data_loader.determine_anchors()
         data_loader.assign_anchors_to_objects()
@@ -198,17 +199,17 @@ def main():
         def _lr_sched(epoch, lr):
 
             if epoch < 60:
-                return 1e-4
+                return 1e-3
 
             elif epoch < 90:
-                return 1e-5
+                return 1e-4
 
             else:
-                return 1e-6
+                return 1e-5
 
-        model = Network(data_loader, cache_idx="mktl2")
-        model.build_components(backbone="small", optimizer=tf.optimizers.Adam(1e-4), lr_scheduler=_lr_sched)
-        
+        model = Network(data_loader, cache_idx="friday_night")
+        model.build_components(backbone="small", optimizer=tf.optimizers.Adam(1e-3), lr_scheduler=_lr_sched)
+
         def _checkpoint_sched(epoch, loss, vloss):
 
             if epoch % 5 == 0:
@@ -225,14 +226,14 @@ def main():
         model = Network(data_loader, cache_idx="full_newcoef")
         model.plot_stats(show_on_screen=True, save_image=False)
 
-    #_test_mask_encoding()
+    _test_mask_encoding()
     #_test_learning_one_img()
     #_plot_model_stats()
     #_test_cache()
     #_test_train()
     #_test_learning_few_img()
     #_run_training()
-    _show_stats()
+    #_show_stats()
     
 if __name__ == "__main__":
     main()
