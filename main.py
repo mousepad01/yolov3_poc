@@ -208,7 +208,7 @@ def main():
         ch_sched = Minloss_checkpoint([LR_CH1 - 1, LR_CH2 - 1, LR_CH3 - 1])
 
         model = Network(data_loader, cache_idx="mktv1")
-        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(1e-2), lr_scheduler=lr_sched)
+        model.build_components(backbone="small", optimizer=tf.optimizers.Adam(1e-2), lr_scheduler=lr_sched)
         model.train(220, 32, progbar=True, checkpoint_sched=ch_sched, copy_at_checkpoint=True)
 
     def _show_stats():
