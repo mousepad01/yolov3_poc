@@ -214,7 +214,7 @@ def main():
     def _show_stats():
 
         data_loader = DataLoader(cache_key="mouse_keyboard_tv_laptop", classes=["mouse", "keyboard", "tv", "laptop"], superclasses=[])
-        model = Network(data_loader, cache_idx="mktv1")
+        model = Network(data_loader, cache_idx="mktv1_e46_vloss171.3178")
         model.plot_stats(show_on_screen=True, save_image=False)
 
     #_test_mask_encoding()

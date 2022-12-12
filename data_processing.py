@@ -22,7 +22,8 @@ class DataLoader:
 
                         cache_key=None,
                         superclasses=["food"],
-                        classes=[]
+                        classes=[],
+                        validation_ratio=0.2,
                     ):
 
         assert(cache_key != TMP_CACHE_KEY)
@@ -77,8 +78,13 @@ class DataLoader:
                                                         "bbox": (x, y, w, h) absolute values
                                                     }
                                                 ],
-                                        "filename": filename
+                                        "filename": complete file path (relative to this project's path)
                                     }
+        '''
+
+        self.validation_ratio = validation_ratio
+        '''
+            (approximate) ratio of |{val imgs}| / |{all imgs}|
         '''
 
         self.anchors = []
@@ -311,7 +317,7 @@ class DataLoader:
                 if img_info["id"] not in self.imgs[purpose]:
                     continue
                 
-                self.imgs[purpose][img_info["id"]]["filename"] = img_info["file_name"]
+                self.imgs[purpose][img_info["id"]]["filename"] = self.data_path[purpose] + img_info["file_name"]
 
                 # h, w intentionally inverted
                 h = img_info["width"]
@@ -344,6 +350,38 @@ class DataLoader:
                     bbox_d_ok.append(bbox_d)
 
                 self.imgs[purpose][img_info["id"]]["objs"] = bbox_d_ok
+
+        t_img_cnt = self.get_img_cnt('train')
+        v_img_cnt = self.get_img_cnt('validation')
+
+        v_raw_ratio = v_img_cnt / (v_img_cnt + t_img_cnt)
+
+        relocate_img_cnt = (v_img_cnt * self.validation_ratio) // v_raw_ratio
+        relocate_img_cnt -= v_img_cnt
+
+        if relocate_img_cnt < 0:
+
+            p_from = "validation"
+            p_to = "train"
+            relocate_img_cnt *= -1
+
+        elif relocate_img_cnt > 0:
+            
+            p_from = "train"
+            p_to = "validation"
+
+        if relocate_img_cnt > 0:
+
+            reloc_ids = []
+
+            for img_id in self.imgs[p_from].keys():
+                reloc_ids.append(img_id)
+
+                if len(reloc_ids) == relocate_img_cnt:
+                    break
+
+            for img_id in reloc_ids:
+                self.imgs[p_to][img_id] = self.imgs[p_from].pop(img_id)
 
         tf.print(f"Loaded {self.get_img_cnt('train')} train images and {self.get_img_cnt('validation')} validation images.")
 
@@ -565,7 +603,7 @@ class DataCacheManager:
 
         else:
 
-            img = cv.imread(self.loader.data_path[purpose] + self.loader.imgs[purpose][img_id]["filename"])
+            img = cv.imread(self.loader.imgs[purpose][img_id]["filename"])
             img = self.resize_with_pad(img)
 
             if len(self._permanent_data[purpose]) < PERMANENT_DATA_ENTRIES:
