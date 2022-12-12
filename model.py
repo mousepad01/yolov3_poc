@@ -57,13 +57,14 @@ class Network:
 
         self.cache_manager.copy_model(new_cache_idx)
        
-    def build_components(self, optimizer: tf.keras.optimizers.Optimizer, lr_scheduler=lambda epoch, lr: lr, backbone="darknet-53"):
+    def build_components(self, optimizer: tf.keras.optimizers.Optimizer, lr_scheduler=lambda epoch, lr: lr, backbone="darknet-53", weight_decay=5e-4):
         ''' 
             if there is already a saved model and cache is used, it loads that model
             if not, it builds the model  using the given parameters
             * optimizer: to use during training (ignored if a saved model is loaded)
             * lr_scheduler(current epoch, current lr) => updated lr
             * backbone: string with the name of the backbone to use (ignored if a saved model is loaded)
+            * weight_decay: for all convolutions
         '''
 
         self.lr_scheduler = lr_scheduler
@@ -81,12 +82,12 @@ class Network:
             # the backbone
             input_img = tf.keras.layers.Input((IMG_SIZE[0], IMG_SIZE[1], 3))
 
-            conv_back1 = ConvLayer(32, 3)(input_img) # 416
-            res_back1 = ResSequence(64, 1)(conv_back1) # 208
-            res_back2 = ResSequence(128, 2)(res_back1) # 104
-            res_back3 = ResSequence(256, 8)(res_back2) # 52
-            res_back4 = ResSequence(512, 8)(res_back3) # 26
-            res_back5 = ResSequence(1024, 4)(res_back4) # 13
+            conv_back1 = ConvLayer(32, 3, weight_decay)(input_img) # 416
+            res_back1 = ResSequence(64, 1, weight_decay)(conv_back1) # 208
+            res_back2 = ResSequence(128, 2, weight_decay)(res_back1) # 104
+            res_back3 = ResSequence(256, 8, weight_decay)(res_back2) # 52
+            res_back4 = ResSequence(512, 8, weight_decay)(res_back3) # 26
+            res_back5 = ResSequence(1024, 4, weight_decay)(res_back4) # 13
 
             self.backbone = tf.keras.Model(inputs=input_img, outputs=res_back5)
 
@@ -96,44 +97,44 @@ class Network:
 
             features_scale1 = res_back5
 
-            conv_scale1_1 = ConvLayer(512, 1)(features_scale1)
-            conv_scale1_2 = ConvLayer(1024, 3)(conv_scale1_1)
-            conv_scale1_3 = ConvLayer(512, 1)(conv_scale1_2)
-            conv_scale1_4 = ConvLayer(1024, 3)(conv_scale1_3)
-            conv_scale1_5 = ConvLayer(512, 1)(conv_scale1_4)
+            conv_scale1_1 = ConvLayer(512, 1, weight_decay)(features_scale1)
+            conv_scale1_2 = ConvLayer(1024, 3, weight_decay)(conv_scale1_1)
+            conv_scale1_3 = ConvLayer(512, 1, weight_decay)(conv_scale1_2)
+            conv_scale1_4 = ConvLayer(1024, 3, weight_decay)(conv_scale1_3)
+            conv_scale1_5 = ConvLayer(512, 1, weight_decay)(conv_scale1_4)
 
-            conv_scale1_6 = ConvLayer(1024, 3)(conv_scale1_5)
-            output_scale1 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1)(conv_scale1_6)
+            conv_scale1_6 = ConvLayer(1024, 3, weight_decay)(conv_scale1_5)
+            output_scale1 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1, weight_decay)(conv_scale1_6)
 
             # output for scale 2
 
-            conv_scale12 = ConvLayer(256, 1)(conv_scale1_5)
+            conv_scale12 = ConvLayer(256, 1, weight_decay)(conv_scale1_5)
             upsample_scale12 = tf.keras.layers.UpSampling2D((2, 2))(conv_scale12)
             features_scale2 = tf.keras.layers.Concatenate(axis=-1)([res_back4, upsample_scale12])
 
-            conv_scale2_1 = ConvLayer(256, 1)(features_scale2)
-            conv_scale2_2 = ConvLayer(512, 3)(conv_scale2_1)
-            conv_scale2_3 = ConvLayer(256, 1)(conv_scale2_2)
-            conv_scale2_4 = ConvLayer(512, 3)(conv_scale2_3)
-            conv_scale2_5 = ConvLayer(256, 1)(conv_scale2_4)
+            conv_scale2_1 = ConvLayer(256, 1, weight_decay)(features_scale2)
+            conv_scale2_2 = ConvLayer(512, 3, weight_decay)(conv_scale2_1)
+            conv_scale2_3 = ConvLayer(256, 1, weight_decay)(conv_scale2_2)
+            conv_scale2_4 = ConvLayer(512, 3, weight_decay)(conv_scale2_3)
+            conv_scale2_5 = ConvLayer(256, 1, weight_decay)(conv_scale2_4)
 
-            conv_scale2_6 = ConvLayer(512, 3)(conv_scale2_5)
-            output_scale2 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1)(conv_scale2_6)
+            conv_scale2_6 = ConvLayer(512, 3, weight_decay)(conv_scale2_5)
+            output_scale2 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1, weight_decay)(conv_scale2_6)
 
             # output for scale 3
 
-            conv_scale23 = ConvLayer(128, 1)(conv_scale2_5)
+            conv_scale23 = ConvLayer(128, 1, weight_decay)(conv_scale2_5)
             upsample_scale23 = tf.keras.layers.UpSampling2D((2, 2))(conv_scale23)
             features_scale3 = tf.keras.layers.Concatenate(axis=-1)([res_back3, upsample_scale23])
 
-            conv_scale3_1 = ConvLayer(128, 1)(features_scale3)
-            conv_scale3_2 = ConvLayer(256, 3)(conv_scale3_1)
-            conv_scale3_3 = ConvLayer(128, 1)(conv_scale3_2)
-            conv_scale3_4 = ConvLayer(256, 3)(conv_scale3_3)
-            conv_scale3_5 = ConvLayer(128, 1)(conv_scale3_4)
+            conv_scale3_1 = ConvLayer(128, 1, weight_decay)(features_scale3)
+            conv_scale3_2 = ConvLayer(256, 3, weight_decay)(conv_scale3_1)
+            conv_scale3_3 = ConvLayer(128, 1, weight_decay)(conv_scale3_2)
+            conv_scale3_4 = ConvLayer(256, 3, weight_decay)(conv_scale3_3)
+            conv_scale3_5 = ConvLayer(128, 1, weight_decay)(conv_scale3_4)
 
-            conv_scale3_6 = ConvLayer(256, 3)(conv_scale3_5)
-            output_scale3 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1)(conv_scale3_6)
+            conv_scale3_6 = ConvLayer(256, 3, weight_decay)(conv_scale3_5)
+            output_scale3 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1, weight_decay)(conv_scale3_6)
 
             self.full_network = tf.keras.Model(inputs=input_img, outputs=[output_scale1, output_scale2, output_scale3])
 
@@ -142,12 +143,12 @@ class Network:
             # the backbone
             input_img = tf.keras.layers.Input((IMG_SIZE[0], IMG_SIZE[1], 3))
 
-            conv_back1 = ConvLayer(16, 3)(input_img) # 416
-            res_back1 = ResSequence(32, 1)(conv_back1) # 208
-            res_back2 = ResSequence(64, 2)(res_back1) # 104
-            res_back3 = ResSequence(128, 4)(res_back2) # 52
-            res_back4 = ResSequence(256, 4)(res_back3) # 26
-            res_back5 = ResSequence(512, 2)(res_back4) # 13
+            conv_back1 = ConvLayer(16, 3, weight_decay)(input_img) # 416
+            res_back1 = ResSequence(32, 1, weight_decay)(conv_back1) # 208
+            res_back2 = ResSequence(64, 2, weight_decay)(res_back1) # 104
+            res_back3 = ResSequence(128, 4, weight_decay)(res_back2) # 52
+            res_back4 = ResSequence(256, 4, weight_decay)(res_back3) # 26
+            res_back5 = ResSequence(512, 2, weight_decay)(res_back4) # 13
 
             self.backbone = tf.keras.Model(inputs=input_img, outputs=res_back5)
 
@@ -157,44 +158,44 @@ class Network:
 
             features_scale1 = res_back5
 
-            conv_scale1_1 = ConvLayer(256, 1)(features_scale1)
-            conv_scale1_2 = ConvLayer(512, 3)(conv_scale1_1)
+            conv_scale1_1 = ConvLayer(256, 1, weight_decay)(features_scale1)
+            conv_scale1_2 = ConvLayer(512, 3, weight_decay)(conv_scale1_1)
             #conv_scale1_3 = ConvLayer(256, 1)(conv_scale1_2)
             #conv_scale1_4 = ConvLayer(512, 3)(conv_scale1_3)
-            conv_scale1_5 = ConvLayer(256, 1)(conv_scale1_2)
+            conv_scale1_5 = ConvLayer(256, 1, weight_decay)(conv_scale1_2)
 
-            conv_scale1_6 = ConvLayer(512, 3)(conv_scale1_5)
-            output_scale1 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1)(conv_scale1_6)
+            conv_scale1_6 = ConvLayer(512, 3, weight_decay)(conv_scale1_5)
+            output_scale1 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1, weight_decay)(conv_scale1_6)
 
             # output for scale 2
 
-            conv_scale12 = ConvLayer(128, 1)(conv_scale1_5)
+            conv_scale12 = ConvLayer(128, 1, weight_decay)(conv_scale1_5)
             upsample_scale12 = tf.keras.layers.UpSampling2D((2, 2))(conv_scale12)
             features_scale2 = tf.keras.layers.Concatenate(axis=-1)([res_back4, upsample_scale12])
 
-            conv_scale2_1 = ConvLayer(128, 1)(features_scale2)
-            conv_scale2_2 = ConvLayer(256, 3)(conv_scale2_1)
+            conv_scale2_1 = ConvLayer(128, 1, weight_decay)(features_scale2)
+            conv_scale2_2 = ConvLayer(256, 3, weight_decay)(conv_scale2_1)
             #conv_scale2_3 = ConvLayer(128, 1)(conv_scale2_2)
             #conv_scale2_4 = ConvLayer(256, 3)(conv_scale2_3)
-            conv_scale2_5 = ConvLayer(128, 1)(conv_scale2_2)
+            conv_scale2_5 = ConvLayer(128, 1, weight_decay)(conv_scale2_2)
 
-            conv_scale2_6 = ConvLayer(256, 3)(conv_scale2_5)
+            conv_scale2_6 = ConvLayer(256, 3, weight_decay)(conv_scale2_5)
             output_scale2 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1)(conv_scale2_6)
 
             # output for scale 3
 
-            conv_scale23 = ConvLayer(64, 1)(conv_scale2_5)
+            conv_scale23 = ConvLayer(64, 1, weight_decay)(conv_scale2_5)
             upsample_scale23 = tf.keras.layers.UpSampling2D((2, 2))(conv_scale23)
             features_scale3 = tf.keras.layers.Concatenate(axis=-1)([res_back3, upsample_scale23])
 
-            conv_scale3_1 = ConvLayer(64, 1)(features_scale3)
-            conv_scale3_2 = ConvLayer(128, 3)(conv_scale3_1)
+            conv_scale3_1 = ConvLayer(64, 1, weight_decay)(features_scale3)
+            conv_scale3_2 = ConvLayer(128, 3, weight_decay)(conv_scale3_1)
             #conv_scale3_3 = ConvLayer(64, 1)(conv_scale3_2)
             #conv_scale3_4 = ConvLayer(128, 3)(conv_scale3_3)
-            conv_scale3_5 = ConvLayer(64, 1)(conv_scale3_2)
+            conv_scale3_5 = ConvLayer(64, 1, weight_decay)(conv_scale3_2)
 
-            conv_scale3_6 = ConvLayer(128, 3)(conv_scale3_5)
-            output_scale3 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1)(conv_scale3_6)
+            conv_scale3_6 = ConvLayer(128, 3, weight_decay)(conv_scale3_5)
+            output_scale3 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1, weight_decay)(conv_scale3_6)
 
             self.full_network = tf.keras.Model(inputs=input_img, outputs=[output_scale1, output_scale2, output_scale3])
 
