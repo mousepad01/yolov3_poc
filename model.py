@@ -273,7 +273,7 @@ class Network:
         if show_on_screen:
             plt.show()
       
-    def train(self, epochs, batch_size, progbar=True, checkpoint_sched=lambda epoch, loss, vloss: False):
+    def train(self, epochs, batch_size, progbar=True, checkpoint_sched=lambda epoch, loss, vloss: False, copy_at_checkpoint=True):
         '''
             * epochs: number of total epochs (effective number of epochs executed: epochs - self.next_training_epoch + 1)
             * batch_size: for training
@@ -303,13 +303,13 @@ class Network:
         validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj, \
         validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh = self.cache_manager.get_stats()
 
+        def _to_output_t(x): 
+            return floor((x / TRAIN_IMG_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)
+
+        def _to_output_v(x):
+            return floor((x / VALIDATION_IMG_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)
+
         def _log_show_losses():
-
-            def _to_output_t(x): 
-                return floor((x / TRAIN_IMG_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)
-
-            def _to_output_v(x):
-                return floor((x / VALIDATION_IMG_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)
 
             train_loss_stats.append(_to_output_t(sum_loss))
             train_loss_stats_noobj.append(_to_output_t(sum_loss_noobj))
@@ -465,6 +465,10 @@ class Network:
                             validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh]
 
                 self.cache_manager.store_stats(stats)
+
+                if copy_at_checkpoint:
+                    vloss = _to_output_v(val_loss)
+                    self.cache_manager.copy_model(f"{self.cache_manager.cache_idx}_e{epoch}_vloss{vloss}")
 
         if self.next_training_epoch >= epochs:
             tf.print(f"Model is already trained (at least) {epochs} epochs.")

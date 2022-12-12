@@ -5,6 +5,7 @@ import cv2 as cv
 from data_processing import *
 from anchor_kmeans import *
 from model import *
+from custom import *
 
 print("NOTE: this implementation relies on the fact that dictionaries are ORDERED. yielding keys in a nedeterministic order breaks everything")
 
@@ -222,18 +223,18 @@ def main():
 
     def _show_stats():
 
-        data_loader = DataLoader(cache_key="base")
-        model = Network(data_loader, cache_idx="full_newcoef")
+        data_loader = DataLoader(cache_key="zebra_bottle_keyboard2", classes=["zebra", "bottle", "keyboard"], superclasses=[])
+        model = Network(data_loader, cache_idx="friday_night")
         model.plot_stats(show_on_screen=True, save_image=False)
 
-    _test_mask_encoding()
+    #_test_mask_encoding()
     #_test_learning_one_img()
     #_plot_model_stats()
     #_test_cache()
     #_test_train()
     #_test_learning_few_img()
     #_run_training()
-    #_show_stats()
+    _show_stats()
     
 if __name__ == "__main__":
     main()
