@@ -85,6 +85,7 @@ class DataLoader:
         self.validation_ratio = validation_ratio
         '''
             (approximate) ratio of |{val imgs}| / |{all imgs}|
+            * to keep original distribution, whatever it may be, call with validation_ratio=None
         '''
 
         self.anchors = []
@@ -351,37 +352,39 @@ class DataLoader:
 
                 self.imgs[purpose][img_info["id"]]["objs"] = bbox_d_ok
 
-        t_img_cnt = self.get_img_cnt('train')
-        v_img_cnt = self.get_img_cnt('validation')
+        if self.validation_ratio:
 
-        v_raw_ratio = v_img_cnt / (v_img_cnt + t_img_cnt)
+            t_img_cnt = self.get_img_cnt('train')
+            v_img_cnt = self.get_img_cnt('validation')
 
-        relocate_img_cnt = (v_img_cnt * self.validation_ratio) // v_raw_ratio
-        relocate_img_cnt -= v_img_cnt
+            v_raw_ratio = v_img_cnt / (v_img_cnt + t_img_cnt)
 
-        if relocate_img_cnt < 0:
+            relocate_img_cnt = (v_img_cnt * self.validation_ratio) // v_raw_ratio
+            relocate_img_cnt -= v_img_cnt
 
-            p_from = "validation"
-            p_to = "train"
-            relocate_img_cnt *= -1
+            if relocate_img_cnt < 0:
 
-        elif relocate_img_cnt > 0:
-            
-            p_from = "train"
-            p_to = "validation"
+                p_from = "validation"
+                p_to = "train"
+                relocate_img_cnt *= -1
 
-        if relocate_img_cnt > 0:
+            elif relocate_img_cnt > 0:
+                
+                p_from = "train"
+                p_to = "validation"
 
-            reloc_ids = []
+            if relocate_img_cnt > 0:
 
-            for img_id in self.imgs[p_from].keys():
-                reloc_ids.append(img_id)
+                reloc_ids = []
 
-                if len(reloc_ids) == relocate_img_cnt:
-                    break
+                for img_id in self.imgs[p_from].keys():
+                    reloc_ids.append(img_id)
 
-            for img_id in reloc_ids:
-                self.imgs[p_to][img_id] = self.imgs[p_from].pop(img_id)
+                    if len(reloc_ids) == relocate_img_cnt:
+                        break
+
+                for img_id in reloc_ids:
+                    self.imgs[p_to][img_id] = self.imgs[p_from].pop(img_id)
 
         tf.print(f"Loaded {self.get_img_cnt('train')} train images and {self.get_img_cnt('validation')} validation images.")
 
