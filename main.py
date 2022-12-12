@@ -191,40 +191,30 @@ def main():
 
     def _run_training():
 
-        data_loader = DataLoader(cache_key="zebra_bottle_keyboard2", classes=["zebra", "bottle", "keyboard"], superclasses=[])
-        #data_loader = DataLoader(cache_key="base2")
+        data_loader = DataLoader(cache_key="mouse_keyboard_tv_laptop", classes=["mouse", "keyboard", "tv", "laptop"], superclasses=[])
         data_loader.load_info()
         data_loader.determine_anchors()
         data_loader.assign_anchors_to_objects()
 
-        def _lr_sched(epoch, lr):
+        LR_CH1 = 100
+        LR_CH2 = 130
+        LR_CH3 = 10000
 
-            if epoch < 60:
-                return 1e-3
+        lrs = {e: 1e-2 for e in range(LR_CH1)}
+        lrs.update({ee: 1e-3 for ee in range(LR_CH1, LR_CH2)})
+        lrs.update({eee: 1e-4 for eee in range(LR_CH2, LR_CH3)})
+        lr_sched = Lr_absolute_sched(lrs)
 
-            elif epoch < 90:
-                return 1e-4
+        ch_sched = Minloss_checkpoint([LR_CH1 - 1, LR_CH2 - 1, LR_CH3 - 1])
 
-            else:
-                return 1e-5
-
-        model = Network(data_loader, cache_idx="friday_night")
-        model.build_components(backbone="small", optimizer=tf.optimizers.Adam(1e-3), lr_scheduler=_lr_sched)
-
-        def _checkpoint_sched(epoch, loss, vloss):
-
-            if epoch % 5 == 0:
-                return True
-
-            return False
-
-        model.train(220, 32, _checkpoint_sched)
-        #model.plot_train_stats(show_on_screen=True, save_image=False)
+        model = Network(data_loader, cache_idx="mktv1")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(1e-2), lr_scheduler=lr_sched)
+        model.train(220, 32, progbar=True, checkpoint_sched=ch_sched, copy_at_checkpoint=True)
 
     def _show_stats():
 
-        data_loader = DataLoader(cache_key="zebra_bottle_keyboard2", classes=["zebra", "bottle", "keyboard"], superclasses=[])
-        model = Network(data_loader, cache_idx="friday_night")
+        data_loader = DataLoader(cache_key="mouse_keyboard_tv_laptop", classes=["mouse", "keyboard", "tv", "laptop"], superclasses=[])
+        model = Network(data_loader, cache_idx="mktv1")
         model.plot_stats(show_on_screen=True, save_image=False)
 
     #_test_mask_encoding()
