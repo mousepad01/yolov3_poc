@@ -15,6 +15,7 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
     '''
 
     output = tf.reshape(output, (output.shape[0], output.shape[1], output.shape[2], ANCHOR_PERSCALE_CNT, -1))
+    CLS_CNT = output.shape[4] - 5
 
     '''
         4 losses:
@@ -43,7 +44,8 @@ def yolov3_loss_perscale(output, bool_mask, target_mask):
 
     # classification loss
     output_class_p = tf.keras.activations.softmax(output[..., 5:])
-    target_class = target_mask[..., 4:]
+    target_class = target_mask[..., 4]
+    target_class = tf.one_hot(tf.cast(target_class, dtype=tf.int32), CLS_CNT)
     classification_loss = bool_mask * tf.expand_dims(tf.keras.losses.categorical_crossentropy(target_class, output_class_p), axis=-1)
     classification_loss = CLASSIF_COEFF * tf.math.reduce_sum(classification_loss)
 

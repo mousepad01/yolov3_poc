@@ -108,7 +108,7 @@ class DataLoader:
             return len(self.imgs["validation"])
 
     def get_class_cnt(self):
-        return len(self.used_categories)
+        return len(self.category_onehot_to_id)
 
     def load_images(self, purpose):
         '''
@@ -426,6 +426,8 @@ class DataLoader:
 
             return intersection / union
 
+        # CLASS_CNT = self.get_class_cnt()
+
         for purpose in ["train", "validation"]:
             
             bool_anchor_masks = [[] for _ in range(SCALE_CNT)]     
@@ -448,7 +450,7 @@ class DataLoader:
                 for d in range(SCALE_CNT):
 
                     bool_mask.append(np.array([[[[0] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])], dtype=np.float64))
-                    target_mask.append(np.array([[[[0 for _ in range(4 + len(self.category_onehot_to_id))] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])], dtype=np.float64))
+                    target_mask.append(np.array([[[[0 for _ in range(5)] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])], dtype=np.float64))
 
                 for bbox_d in self.imgs[purpose][img_id]["objs"]:
 
@@ -491,7 +493,7 @@ class DataLoader:
                                                                                             tf.convert_to_tensor([tf.math.log(y / (1 - y))]),
                                                                                             tf.convert_to_tensor([tf.math.log(w / anchor_w)]), 
                                                                                             tf.convert_to_tensor([tf.math.log(h / anchor_h)]),
-                                                                                            tf.cast(tf.one_hot(categ, len(self.category_onehot_to_id)), dtype=tf.double)],
+                                                                                            tf.convert_to_tensor([categ], dtype=tf.double)],
                                                                                             axis=0), dtype=np.float64)
 
                     if tf.reduce_sum(tf.cast(tf.math.is_nan(target_mask[max_iou_scale][cx][cy][max_iou_idx]), tf.int32)) > 0:

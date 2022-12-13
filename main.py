@@ -13,7 +13,9 @@ def main():
 
     def _test_mask_encoding():
 
-        data_loader = DataLoader(cache_key="zebra_bottle_keyboard_v0.2", classes=["zebra", "bottle", "keyboard"], superclasses=[], validation_ratio=0.2)
+        data_loader = DataLoader(cache_key="all", classes=[], superclasses=["person", "vehicle", "outdoor", "animal", "accessory", \
+                                                                            "sports", "kitchen", "food", "furniture", "electronic", \
+                                                                            "appliance", "indoor"], validation_ratio=0.2)
         data_loader.load_info()
         data_loader.determine_anchors()
         data_loader.assign_anchors_to_objects()
@@ -22,6 +24,8 @@ def main():
         def _get_imgid():
             for imgid in data_loader.imgs["validation"].keys():
                 yield imgid
+
+        CLS_CNT = data_loader.get_class_cnt()
 
         for _ in range(1):
 
@@ -43,7 +47,7 @@ def main():
                     tw_th = target_anchor_masks[d][..., 2:4] * bool_anchor_masks[d]
                     to = tf.cast(tf.fill((B, S, S, A, 1), value=10.0), dtype=tf.float32) * bool_anchor_masks[d] + \
                             tf.cast(tf.fill((B, S, S, A, 1), value=-10.0), dtype=tf.float32) * (1 - bool_anchor_masks[d])
-                    probabilities = target_anchor_masks[d][..., 4:] * 10
+                    probabilities = tf.one_hot(tf.cast(target_anchor_masks[d][..., 4], dtype=tf.int32), CLS_CNT)  * 10
                     output_from_mask[d] = tf.concat([tx_ty, tw_th, to, probabilities], axis=-1) 
 
                 anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_loader.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
