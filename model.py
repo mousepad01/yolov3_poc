@@ -180,7 +180,7 @@ class Network:
             conv_scale2_5 = ConvLayer(128, 1, weight_decay)(conv_scale2_2)
 
             conv_scale2_6 = ConvLayer(256, 3, weight_decay)(conv_scale2_5)
-            output_scale2 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1)(conv_scale2_6)
+            output_scale2 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1, weight_decay)(conv_scale2_6)
 
             # output for scale 3
 

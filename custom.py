@@ -32,3 +32,17 @@ class Lr_absolute_sched:
         return self.lr_dict[epoch]
 
 # TODO lr that increases / decreases relative to current lr
+
+class Lr_gradual_sched1:
+
+    def __init__(self, rate, epochs):
+
+        self.rate = rate
+        self.epochs = epochs
+
+    def __call__(self, epoch, lr):
+        
+        if epoch < self.epochs:
+            return lr * self.rate
+
+        return lr

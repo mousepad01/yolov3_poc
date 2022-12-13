@@ -196,25 +196,18 @@ def main():
         data_loader.determine_anchors()
         data_loader.assign_anchors_to_objects()
 
-        LR_CH1 = 100
-        LR_CH2 = 130
-        LR_CH3 = 10000
-
-        lrs = {e: 1e-2 for e in range(LR_CH1)}
-        lrs.update({ee: 1e-3 for ee in range(LR_CH1, LR_CH2)})
-        lrs.update({eee: 1e-4 for eee in range(LR_CH2, LR_CH3)})
-        lr_sched = Lr_absolute_sched(lrs)
+        lr_sched = Lr_gradual_sched1(0.9, 20)
 
         #ch_sched = Minloss_checkpoint([LR_CH1 - 1, LR_CH2 - 1, LR_CH3 - 1])
 
-        model = Network(data_loader, cache_idx="zbk7_sgd")
+        model = Network(data_loader, cache_idx="zbk14")
         model.build_components(backbone="small", optimizer=tf.optimizers.SGD(1e-2, momentum=0.9), lr_scheduler=lr_sched)
         model.train(220, 64, progbar=True)
 
     def _show_stats():
 
         data_loader = DataLoader(cache_key="zebra_bottle_keyboard_v0.2", classes=["zebra", "bottle", "keyboard"], superclasses=[], validation_ratio=0.2)
-        model = Network(data_loader, cache_idx="zbk6_sgd")
+        model = Network(data_loader, cache_idx="zbk14")
         model.plot_stats(show_on_screen=True, save_image=False)
 
     #_test_mask_encoding()
