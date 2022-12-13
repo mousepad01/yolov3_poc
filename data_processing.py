@@ -611,7 +611,7 @@ class DataCacheManager:
             img = cv.imread(self.loader.imgs[purpose][img_id]["filename"])
             img = self.resize_with_pad(img)
 
-            if len(self._permanent_data[purpose]) < PERMANENT_DATA_ENTRIES:
+            if len(self._permanent_data["train"]) + len(self._permanent_data["validation"]) < PERMANENT_DATA_ENTRIES:
                 self._permanent_data[purpose][img_id] = img
 
             return img
@@ -636,7 +636,7 @@ class DataCacheManager:
                 raw_cache = cache_f.read()
             target_masks = pickle.loads(raw_cache)
 
-            if len(self._permanent_gt[purpose]) < PERMANENT_GT_BATCHES:
+            if len(self._permanent_gt["train"]) + len(self._permanent_gt["validation"]) < PERMANENT_GT_BATCHES:
                 self._permanent_gt[purpose][gt_batch_idx] = (bool_masks, target_masks)
 
             return (bool_masks, target_masks)

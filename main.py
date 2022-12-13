@@ -47,7 +47,7 @@ def main():
                     tw_th = target_anchor_masks[d][..., 2:4] * bool_anchor_masks[d]
                     to = tf.cast(tf.fill((B, S, S, A, 1), value=10.0), dtype=tf.float32) * bool_anchor_masks[d] + \
                             tf.cast(tf.fill((B, S, S, A, 1), value=-10.0), dtype=tf.float32) * (1 - bool_anchor_masks[d])
-                    probabilities = tf.one_hot(tf.cast(target_anchor_masks[d][..., 4], dtype=tf.int32), CLS_CNT)  * 10
+                    probabilities = tf.cast(tf.one_hot(tf.cast(target_anchor_masks[d][..., 4], dtype=tf.int32), CLS_CNT) * 10.0, dtype=tf.float32)
                     output_from_mask[d] = tf.concat([tx_ty, tw_th, to, probabilities], axis=-1) 
 
                 anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_loader.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
@@ -195,18 +195,27 @@ def main():
 
     def _run_training():
 
-        data_loader = DataLoader(cache_key="zebra_bottle_keyboard_v0.2", classes=["zebra", "bottle", "keyboard"], superclasses=[], validation_ratio=0.2)
+        data_loader = DataLoader(cache_key="all", classes=[], superclasses=["person", "vehicle", "outdoor", "animal", "accessory", \
+                                                                            "sports", "kitchen", "food", "furniture", "electronic", \
+                                                                            "appliance", "indoor"], validation_ratio=0.2)
         data_loader.load_info()
         data_loader.determine_anchors()
         data_loader.assign_anchors_to_objects()
 
-        lr_sched = Lr_gradual_sched1(0.9, 20)
+        LR_CH1 = 60
+        LR_CH2 = 90
+        LR_CH3 = 1000
 
-        #ch_sched = Minloss_checkpoint([LR_CH1 - 1, LR_CH2 - 1, LR_CH3 - 1])
+        lrs = {e: 1e-3 for e in range(LR_CH1)}
+        lrs.update({e: 1e-4 for e in range(LR_CH1, LR_CH2)})
+        lrs.update({e: 1e-5 for e in range(LR_CH2, LR_CH3)})
 
-        model = Network(data_loader, cache_idx="zbk14")
-        model.build_components(backbone="small", optimizer=tf.optimizers.SGD(1e-2, momentum=0.9), lr_scheduler=lr_sched)
-        model.train(220, 64, progbar=True)
+        lr_sched = Lr_absolute_sched(lrs)
+        ch_sched = Minloss_checkpoint([x for x in range(10, 160, 10)])
+
+        model = Network(data_loader, cache_idx="a1")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), lr_scheduler=lr_sched)
+        model.train(160, 64, progbar=True, checkpoint_sched=ch_sched, copy_at_checkpoint=True)
 
     def _show_stats():
 
@@ -220,8 +229,8 @@ def main():
     #_test_cache()
     #_test_train()
     #_test_learning_few_img()
-    #_run_training()
-    _show_stats()
+    _run_training()
+    #_show_stats()
     
 if __name__ == "__main__":
     main()
