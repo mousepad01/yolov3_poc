@@ -31,8 +31,6 @@ def main():
 
             img_keys = _get_imgid()
             for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_loader.load_data(4, "validation"):
-                
-                break
 
                 img_keys_ = []
                 for _ in range(imgs.shape[0]):
@@ -61,7 +59,7 @@ def main():
                     cnt_ += 1
 
                     img = cv.imread(data_loader.imgs["validation"][img_id]["filename"])
-                    img = data_loader.cache_manager.resize_with_pad(img)
+                    img = tf.convert_to_tensor(data_loader.cache_manager.resize_with_pad(img))
 
                     output_perimg = [make_prediction_perscale(output_from_mask[d][cnt_ - 1: cnt_], anchors_relative[d], 0.6) for d in range(SCALE_CNT)]
                     show_prediction(img, [output_perimg[d][0] for d in range(SCALE_CNT)],

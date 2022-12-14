@@ -59,7 +59,7 @@ GT_LOAD_BATCH_SIZE = 1024
 assert(GT_LOAD_BATCH_SIZE % DATA_LOAD_BATCH_SIZE == 0)
 assert(GT_LOAD_BATCH_SIZE >= DATA_LOAD_BATCH_SIZE)
 
-PERMANENT_DATA_BATCHES = 100000000
+PERMANENT_DATA_BATCHES = 10000
 '''
     how many data batches to permanently store in memory (and be loaded only once)
 '''
@@ -80,6 +80,11 @@ COMPRESS_GT_CACHE_LEVEL = 1
     * corresponds to zlib.compress levels
     * applicable only if there are GT batches cached (when PERMANENT_GT_BATCHES > 0)
     * usually 1 is good enough, because it compresses all the sparseness
+'''
+
+COMPRESS_DATA_CACHE = True
+'''
+    * whether to store image cache as jpg or bitmap in rap
 '''
 
 '''

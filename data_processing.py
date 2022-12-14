@@ -602,12 +602,16 @@ class DataCacheManager:
 
             img = np.concatenate([padl, img, padr], 1)
 
-        return tf.convert_to_tensor(cv.resize(img, IMG_SIZE))
+        return cv.resize(img, IMG_SIZE)
 
     def get_img(self, img_id, purpose):
 
         if img_id in self._permanent_data[purpose].keys():
-            return self._permanent_data[purpose][img_id]
+
+            if COMPRESS_DATA_CACHE:
+                return tf.convert_to_tensor(cv.imdecode(self._permanent_data[purpose][img_id], cv.IMREAD_UNCHANGED))
+            else:
+                return self._permanent_data[purpose][img_id]
 
         else:
 
@@ -615,9 +619,14 @@ class DataCacheManager:
             img = self.resize_with_pad(img)
 
             if len(self._permanent_data["train"]) + len(self._permanent_data["validation"]) < PERMANENT_DATA_ENTRIES:
-                self._permanent_data[purpose][img_id] = img
 
-            return img
+                if COMPRESS_DATA_CACHE:
+                    _, encoded_img = cv.imencode(".jpg", img)
+                    self._permanent_data[purpose][img_id] = encoded_img
+                else:
+                    self._permanent_data[purpose][img_id] = tf.convert_to_tensor(img)
+
+            return tf.convert_to_tensor(img)
 
     def get_gt_batch(self, gt_batch_idx, purpose):
 
