@@ -1,7 +1,6 @@
 import json
-import time
+import zlib
 import pickle
-import psutil
 
 import cv2 as cv
 import numpy as np
@@ -141,6 +140,7 @@ class DataLoader:
     def load_gt(self, purpose):
         '''
             loads ground truth for each image batch
+            * batches get loaded on GPU at the splicing when yielding
         '''    
 
         IMG_CNT = self.get_img_cnt(purpose)
@@ -198,6 +198,9 @@ class DataLoader:
                     slice_idx += DATA_LOAD_BATCH_SIZE
 
     def load_data(self, batch_size, purpose):
+        '''
+            * images get loaded on GPU at the cast when yielding
+        '''
 
         if DATA_LOAD_BATCH_SIZE < batch_size:
             tf.print("Data load batch size must be >= with the train batch size")
@@ -619,7 +622,13 @@ class DataCacheManager:
     def get_gt_batch(self, gt_batch_idx, purpose):
 
         if gt_batch_idx in self._permanent_gt[purpose].keys():
-            return self._permanent_gt[purpose][gt_batch_idx]
+
+            if COMPRESS_GT_CACHE_LEVEL != 0:
+                return (pickle.loads(zlib.decompress(self._permanent_gt[purpose][gt_batch_idx][0])), \
+                        pickle.loads(zlib.decompress(self._permanent_gt[purpose][gt_batch_idx][1])))
+
+            else:
+                return self._permanent_gt[purpose][gt_batch_idx]
 
         else:
 
@@ -637,7 +646,12 @@ class DataCacheManager:
             target_masks = pickle.loads(raw_cache)
 
             if len(self._permanent_gt["train"]) + len(self._permanent_gt["validation"]) < PERMANENT_GT_BATCHES:
-                self._permanent_gt[purpose][gt_batch_idx] = (bool_masks, target_masks)
+
+                if COMPRESS_GT_CACHE_LEVEL != 0:
+                    self._permanent_gt[purpose][gt_batch_idx] = (zlib.compress(pickle.dumps(bool_masks), COMPRESS_GT_CACHE_LEVEL), \
+                                                                    zlib.compress(pickle.dumps(target_masks), COMPRESS_GT_CACHE_LEVEL))
+                else:
+                    self._permanent_gt[purpose][gt_batch_idx] = (bool_masks, target_masks)
 
             return (bool_masks, target_masks)
 

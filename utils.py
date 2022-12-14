@@ -3,6 +3,30 @@
     Various constants needed in whatever places
 '''
 
+'''
+    ############################################ CACHE AND DATA LOADING ############################################
+'''
+
+TRAIN_DATA_PATH = "./data/train2017/"
+'''
+    train data path
+'''
+
+VALIDATION_DATA_PATH = "./data/val2017/"
+'''
+    validation data path
+'''
+
+TRAIN_INFO_PATH = "./data/annotations/instances_train2017.json"
+'''
+    train metadata
+'''
+
+VALIDATION_INFO_PATH = "./data/annotations/instances_val2017.json"
+'''
+    validation metadata
+'''
+
 DATA_CACHE_PATH = "./data_cache/"
 '''
     (relative) path for storing data (anchors, gt masks) caches
@@ -35,7 +59,7 @@ GT_LOAD_BATCH_SIZE = 1024
 assert(GT_LOAD_BATCH_SIZE % DATA_LOAD_BATCH_SIZE == 0)
 assert(GT_LOAD_BATCH_SIZE >= DATA_LOAD_BATCH_SIZE)
 
-PERMANENT_DATA_BATCHES = 10000000000
+PERMANENT_DATA_BATCHES = 100000000
 '''
     how many data batches to permanently store in memory (and be loaded only once)
 '''
@@ -45,9 +69,21 @@ PERMANENT_DATA_ENTRIES = PERMANENT_DATA_BATCHES * DATA_LOAD_BATCH_SIZE
     how many data entries to permanently store in memory (and be loaded only once)
 '''
 
-PERMANENT_GT_BATCHES = 10000000000
+PERMANENT_GT_BATCHES = 1000
 '''
     how many gt entries to permanently store in memory (and be loaded only once)
+'''
+
+COMPRESS_GT_CACHE_LEVEL = 1
+'''
+    * the level of compression of GT cache batches
+    * corresponds to zlib.compress levels
+    * applicable only if there are GT batches cached (when PERMANENT_GT_BATCHES > 0)
+    * usually 1 is good enough, because it compresses all the sparseness
+'''
+
+'''
+    ############################################ MODEL CONSTANTS AND OUTPUT ############################################
 '''
 
 IMG_SIZE = (416, 416)
@@ -92,24 +128,4 @@ for idx, rgb in enumerate(CLASS_TO_COLOR):
 LOSS_OUTPUT_PRECISION = 4
 '''
     how many decimals for loss output - does not influence in any way the model
-'''
-
-TRAIN_DATA_PATH = "./data/train2017/"
-'''
-    train data path
-'''
-
-VALIDATION_DATA_PATH = "./data/val2017/"
-'''
-    validation data path
-'''
-
-TRAIN_INFO_PATH = "./data/annotations/instances_train2017.json"
-'''
-    train metadata
-'''
-
-VALIDATION_INFO_PATH = "./data/annotations/instances_val2017.json"
-'''
-    validation metadata
 '''

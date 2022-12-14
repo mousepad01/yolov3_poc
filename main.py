@@ -27,10 +27,12 @@ def main():
 
         CLS_CNT = data_loader.get_class_cnt()
 
-        for _ in range(1):
+        for _ in range(4):
 
             img_keys = _get_imgid()
             for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_loader.load_data(4, "validation"):
+                
+                break
 
                 img_keys_ = []
                 for _ in range(imgs.shape[0]):
@@ -213,23 +215,25 @@ def main():
         lr_sched = Lr_absolute_sched(lrs)
         ch_sched = Minloss_checkpoint([x for x in range(10, 160, 10)])
 
-        model = Network(data_loader, cache_idx="a1")
+        model = Network(data_loader, cache_idx="a4")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), lr_scheduler=lr_sched)
         model.train(160, 64, progbar=True, checkpoint_sched=ch_sched, copy_at_checkpoint=True)
 
     def _show_stats():
 
-        data_loader = DataLoader(cache_key="zebra_bottle_keyboard_v0.2", classes=["zebra", "bottle", "keyboard"], superclasses=[], validation_ratio=0.2)
-        model = Network(data_loader, cache_idx="zbk14")
+        data_loader = DataLoader(cache_key="all", classes=[], superclasses=["person", "vehicle", "outdoor", "animal", "accessory", \
+                                                                            "sports", "kitchen", "food", "furniture", "electronic", \
+                                                                            "appliance", "indoor"], validation_ratio=0.2)
+        model = Network(data_loader, cache_idx="a1")
         model.plot_stats(show_on_screen=True, save_image=False)
 
-    #_test_mask_encoding()
+    _test_mask_encoding()
     #_test_learning_one_img()
     #_plot_model_stats()
     #_test_cache()
     #_test_train()
     #_test_learning_few_img()
-    _run_training()
+    #_run_training()
     #_show_stats()
     
 if __name__ == "__main__":
