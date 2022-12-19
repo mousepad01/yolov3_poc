@@ -509,33 +509,29 @@ class DataLoader:
                             if current_iou >= IGNORED_ANCHOR_IOU_THRESHOLD:
                                 ignore_anchors.append((a, d))
 
-                    x, y = x + w // 2, y + h // 2
-                    x, y, w, h = x / IMG_SIZE[0], y / IMG_SIZE[0], w / IMG_SIZE[0], h / IMG_SIZE[0]
-                    x, y, w, h = x * GRID_CELL_CNT[max_iou_scale], y * GRID_CELL_CNT[max_iou_scale], w * GRID_CELL_CNT[max_iou_scale], h * GRID_CELL_CNT[max_iou_scale]
+                    x_, y_, w_, h_ = x + w // 2, y + h // 2, w, h
+                    x_, y_, w_, h_ = x_ / IMG_SIZE[0], y_ / IMG_SIZE[0], w_ / IMG_SIZE[0], h_ / IMG_SIZE[0]
+                    x_, y_, w_, h_ = x_ * GRID_CELL_CNT[max_iou_scale], y_ * GRID_CELL_CNT[max_iou_scale], w_ * GRID_CELL_CNT[max_iou_scale], h_ * GRID_CELL_CNT[max_iou_scale]
 
-                    if x == np.floor(x):
-                        x -= 0.05
+                    if x_ == np.floor(x_):
+                        x_ -= 0.05
 
-                    if y == np.floor(y):
-                        y -= 0.05
+                    if y_ == np.floor(y_):
+                        y_ -= 0.05
 
-                    cx, cy = np.int32(np.floor(x)), np.int32(np.floor(y))
-                    x, y = x - cx, y - cy   # x - cx, y - cy == sigmoid(tx) - cx, sigmoid(ty) - cy <=> x = sigmoid(tx), y = sigmoid(ty)
+                    cx, cy = np.int32(np.floor(x_)), np.int32(np.floor(y_))
+                    x_, y_ = x_ - cx, y_ - cy 
 
-                    # get anchor w and h relative to the grid cell count
                     anchor_w = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][0] / IMG_SIZE[0])
                     anchor_h = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][1] / IMG_SIZE[0])
 
                     obj_mask[max_iou_scale][cx][cy][max_iou_idx] = [1.0]
-                    target_mask[max_iou_scale][cx][cy][max_iou_idx] = np.array(tf.concat([tf.convert_to_tensor([tf.math.log(x / (1 - x))]), 
-                                                                                            tf.convert_to_tensor([tf.math.log(y / (1 - y))]),
-                                                                                            tf.convert_to_tensor([tf.math.log(w / anchor_w)]), 
-                                                                                            tf.convert_to_tensor([tf.math.log(h / anchor_h)]),
+                    target_mask[max_iou_scale][cx][cy][max_iou_idx] = np.array(tf.concat([tf.convert_to_tensor([tf.math.log(x_ / (1 - x_))]), 
+                                                                                            tf.convert_to_tensor([tf.math.log(y_ / (1 - y_))]),
+                                                                                            tf.convert_to_tensor([tf.math.log(w_ / anchor_w)]), 
+                                                                                            tf.convert_to_tensor([tf.math.log(h_ / anchor_h)]),
                                                                                             tf.convert_to_tensor([categ], dtype=tf.double)],
                                                                                             axis=0), dtype=np.float64)
-
-                    for a_idx, a_scale in ignore_anchors:
-                        ignored_mask[a_scale][cx][cy][a_idx] = [1]
 
                     if tf.reduce_sum(tf.cast(tf.math.is_nan(target_mask[max_iou_scale][cx][cy][max_iou_idx]), tf.int32)) > 0:
                         tf.print("Nan found when assigning anchors; possible error?")
@@ -545,15 +541,31 @@ class DataLoader:
                         tf.print("Inf found when assigning anchors; try to make MIN_BBOX_DIM bigger.")
                         quit()
 
+                    for a_idx, a_scale in ignore_anchors:
+                        
+                        x_, y_ = x + w // 2, y + h // 2
+                        x_, y_ = x_ / IMG_SIZE[0], y_ / IMG_SIZE[0]
+                        x_, y_ = x_ * GRID_CELL_CNT[a_scale], y_ * GRID_CELL_CNT[a_scale]
+
+                        if x_ == np.floor(x_):
+                            x_ -= 0.05
+
+                        if y_ == np.floor(y_):
+                            y_ -= 0.05
+
+                        cx, cy = np.int32(np.floor(x_)), np.int32(np.floor(y_))
+                        
+                        ignored_mask[a_scale][cx][cy][a_idx] = [1]
+
                 for d in range(SCALE_CNT):
                     for cx in range(GRID_CELL_CNT[d]):
                         for cy in range(GRID_CELL_CNT[d]):
                             for a_idx in range(ANCHOR_PERSCALE_CNT):
 
-                                if (obj_mask[d][cx][cy][a_idx] == [0]) and (ignored_anchor_masks[d][cx][cy][a_idx] == [1]):
-                                    ignored_anchor_masks[d][cx][cy][a_idx] = [1.0]
+                                if (obj_mask[d][cx][cy][a_idx] == [0]) and (ignored_mask[d][cx][cy][a_idx] == [1]):
+                                    ignored_mask[d][cx][cy][a_idx] = [1.0]
                                 else:
-                                    ignored_anchor_masks[d][cx][cy][a_idx] = [0.0]
+                                    ignored_mask[d][cx][cy][a_idx] = [0.0]
 
                 for d in range(SCALE_CNT):
 
