@@ -104,7 +104,8 @@ class Network:
             conv_scale1_5 = ConvLayer(512, 1, weight_decay)(conv_scale1_4)
 
             conv_scale1_6 = ConvLayer(1024, 3, weight_decay)(conv_scale1_5)
-            output_scale1 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1, weight_decay)(conv_scale1_6)
+            output_scale1 = tf.keras.layers.Conv2D(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT),
+                                                    1, padding="same", kernel_regularizer=tf.keras.regularizers.l2(weight_decay))(conv_scale1_6)
 
             # output for scale 2
 
@@ -119,7 +120,8 @@ class Network:
             conv_scale2_5 = ConvLayer(256, 1, weight_decay)(conv_scale2_4)
 
             conv_scale2_6 = ConvLayer(512, 3, weight_decay)(conv_scale2_5)
-            output_scale2 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1, weight_decay)(conv_scale2_6)
+            output_scale2 = tf.keras.layers.Conv2D(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT),
+                                                    1, padding="same", kernel_regularizer=tf.keras.regularizers.l2(weight_decay))(conv_scale2_6)
 
             # output for scale 3
 
@@ -134,7 +136,8 @@ class Network:
             conv_scale3_5 = ConvLayer(128, 1, weight_decay)(conv_scale3_4)
 
             conv_scale3_6 = ConvLayer(256, 3, weight_decay)(conv_scale3_5)
-            output_scale3 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1, weight_decay)(conv_scale3_6)
+            output_scale3 = tf.keras.layers.Conv2D(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT),
+                                                    1, padding="same", kernel_regularizer=tf.keras.regularizers.l2(weight_decay))(conv_scale3_6)
 
             self.full_network = tf.keras.Model(inputs=input_img, outputs=[output_scale1, output_scale2, output_scale3])
 
@@ -165,7 +168,8 @@ class Network:
             conv_scale1_5 = ConvLayer(256, 1, weight_decay)(conv_scale1_2)
 
             conv_scale1_6 = ConvLayer(512, 3, weight_decay)(conv_scale1_5)
-            output_scale1 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1, weight_decay)(conv_scale1_6)
+            output_scale1 = tf.keras.layers.Conv2D(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT),
+                                                    1, padding="same", kernel_regularizer=tf.keras.regularizers.l2(weight_decay))(conv_scale1_6)
 
             # output for scale 2
 
@@ -180,7 +184,8 @@ class Network:
             conv_scale2_5 = ConvLayer(128, 1, weight_decay)(conv_scale2_2)
 
             conv_scale2_6 = ConvLayer(256, 3, weight_decay)(conv_scale2_5)
-            output_scale2 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1, weight_decay)(conv_scale2_6)
+            output_scale2 = tf.keras.layers.Conv2D(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT),
+                                                    1, padding="same", kernel_regularizer=tf.keras.regularizers.l2(weight_decay))(conv_scale2_6)
 
             # output for scale 3
 
@@ -195,7 +200,8 @@ class Network:
             conv_scale3_5 = ConvLayer(64, 1, weight_decay)(conv_scale3_2)
 
             conv_scale3_6 = ConvLayer(128, 3, weight_decay)(conv_scale3_5)
-            output_scale3 = ConvLayer(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT), 1, weight_decay)(conv_scale3_6)
+            output_scale3 = tf.keras.layers.Conv2D(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT),
+                                                    1, padding="same", kernel_regularizer=tf.keras.regularizers.l2(weight_decay))(conv_scale3_6)
 
             self.full_network = tf.keras.Model(inputs=input_img, outputs=[output_scale1, output_scale2, output_scale3])
 
@@ -312,19 +318,19 @@ class Network:
 
         def _log_show_losses():
 
-            train_loss_stats.append(_to_output_t(sum_loss))
             train_loss_stats_noobj.append(_to_output_t(sum_loss_noobj))
             train_loss_stats_obj.append(_to_output_t(sum_loss_obj))
             train_loss_stats_cl.append(_to_output_t(sum_loss_cl))
             train_loss_stats_xy.append(_to_output_t(sum_loss_xy))
             train_loss_stats_wh.append(_to_output_t(sum_loss_wh))
+            train_loss_stats.append(_to_output_t(sum_loss))
 
-            validation_loss_stats.append(_to_output_v(val_loss))
             validation_loss_stats_noobj.append(_to_output_v(val_loss_noobj))
             validation_loss_stats_obj.append(_to_output_v(val_loss_obj))
             validation_loss_stats_cl.append(_to_output_v(val_loss_cl))
             validation_loss_stats_xy.append(_to_output_v(val_loss_xy))
-            validation_loss_stats_wh.append(_to_output_v(val_loss))
+            validation_loss_stats_wh.append(_to_output_v(val_loss_wh))
+            validation_loss_stats.append(_to_output_v(val_loss))
 
             #tf.print(f"\n===================================================================================================================\n")
             tf.print(f"\nTrain total loss:           {_to_output_t(sum_loss)}")

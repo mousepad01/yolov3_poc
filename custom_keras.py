@@ -15,7 +15,7 @@ class ConvLayer(tf.keras.layers.Layer):
     def __init__(self, filters: int, size: int, w_decay: float, stride=1):
         super().__init__()
 
-        self.conv = tf.keras.layers.Conv2D(filters=filters, kernel_size=size, strides=stride, padding="same", use_bias=False, kernel_regularizer=tf.keras.regularizers.l2(w_decay))
+        self.conv = tf.keras.layers.Conv2D(filters=filters, kernel_size=size, strides=stride, padding="same", kernel_regularizer=tf.keras.regularizers.l2(w_decay))
         self.bnorm = tf.keras.layers.BatchNormalization()
         self.leaky_relu = tf.keras.layers.LeakyReLU(alpha=ConvLayer.LEAKY_RELU_RATE)
 

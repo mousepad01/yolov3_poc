@@ -195,9 +195,9 @@ def main():
 
     def _run_training():
 
-        data_loader = DataLoader(cache_key="all", classes=[], superclasses=["person", "vehicle", "outdoor", "animal", "accessory", \
+        data_loader = DataLoader(cache_key="all_orgval", classes=[], superclasses=["person", "vehicle", "outdoor", "animal", "accessory", \
                                                                             "sports", "kitchen", "food", "furniture", "electronic", \
-                                                                            "appliance", "indoor"], validation_ratio=0.2)
+                                                                            "appliance", "indoor"], validation_ratio=False)
         data_loader.load_info()
         data_loader.determine_anchors()
         data_loader.assign_anchors_to_objects()
@@ -213,26 +213,26 @@ def main():
         lr_sched = Lr_absolute_sched(lrs)
         ch_sched = Minloss_checkpoint([x for x in range(10, 160, 10)])
 
-        model = Network(data_loader, cache_idx="a4")
+        model = Network(data_loader, cache_idx="afull64_default_val")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), lr_scheduler=lr_sched)
-        model.train(160, 64, progbar=True, checkpoint_sched=ch_sched, copy_at_checkpoint=True)
+        model.train(160, 64, progbar=True, checkpoint_sched=ch_sched, copy_at_checkpoint=False)
 
     def _show_stats():
 
         data_loader = DataLoader(cache_key="all", classes=[], superclasses=["person", "vehicle", "outdoor", "animal", "accessory", \
                                                                             "sports", "kitchen", "food", "furniture", "electronic", \
                                                                             "appliance", "indoor"], validation_ratio=0.2)
-        model = Network(data_loader, cache_idx="a1")
+        model = Network(data_loader, cache_idx="afull")
         model.plot_stats(show_on_screen=True, save_image=False)
 
-    _test_mask_encoding()
+    #_test_mask_encoding()
     #_test_learning_one_img()
     #_plot_model_stats()
     #_test_cache()
     #_test_train()
     #_test_learning_few_img()
     #_run_training()
-    #_show_stats()
+    _show_stats()
     
 if __name__ == "__main__":
     main()
