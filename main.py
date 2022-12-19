@@ -13,9 +13,7 @@ def main():
 
     def _test_mask_encoding():
 
-        data_loader = DataLoader(cache_key="all", classes=[], superclasses=["person", "vehicle", "outdoor", "animal", "accessory", \
-                                                                            "sports", "kitchen", "food", "furniture", "electronic", \
-                                                                            "appliance", "indoor"], validation_ratio=0.2)
+        data_loader = DataLoader(cache_key="all")
         data_loader.load_info()
         data_loader.determine_anchors()
         data_loader.assign_anchors_to_objects()
@@ -30,23 +28,26 @@ def main():
         for _ in range(4):
 
             img_keys = _get_imgid()
-            for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_loader.load_data(4, "validation"):
+            for (imgs, obj_mask_size1, ignored_mask_size1, target_mask_size1, \
+                        obj_mask_size2, ignored_mask_size2, target_mask_size2, \
+                        obj_mask_size3, ignored_mask_size3, target_mask_size3) in data_loader.load_data(4, "validation"):
 
                 img_keys_ = []
                 for _ in range(imgs.shape[0]):
                     img_keys_.append(next(img_keys))
 
-                bool_anchor_masks = [bool_mask_size1, bool_mask_size2, bool_mask_size3]
+                obj_anchor_masks = [obj_mask_size1, obj_mask_size2, obj_mask_size3]
+                ignored_anchor_masks = [ignored_mask_size1, ignored_mask_size2, ignored_mask_size3]
                 target_anchor_masks = [target_mask_size1, target_mask_size2, target_mask_size3]
 
                 output_from_mask = [None for _ in range(SCALE_CNT)]
                 for d in range(SCALE_CNT):
 
                     B, S, A = target_anchor_masks[d].shape[0], target_anchor_masks[d].shape[1], target_anchor_masks[d].shape[3]
-                    tx_ty = target_anchor_masks[d][..., 0:2] * bool_anchor_masks[d]
-                    tw_th = target_anchor_masks[d][..., 2:4] * bool_anchor_masks[d]
-                    to = tf.cast(tf.fill((B, S, S, A, 1), value=10.0), dtype=tf.float32) * bool_anchor_masks[d] + \
-                            tf.cast(tf.fill((B, S, S, A, 1), value=-10.0), dtype=tf.float32) * (1 - bool_anchor_masks[d])
+                    tx_ty = target_anchor_masks[d][..., 0:2] * obj_anchor_masks[d]
+                    tw_th = target_anchor_masks[d][..., 2:4] * obj_anchor_masks[d]
+                    to = tf.cast(tf.fill((B, S, S, A, 1), value=10.0), dtype=tf.float32) * obj_anchor_masks[d] + \
+                            tf.cast(tf.fill((B, S, S, A, 1), value=-10.0), dtype=tf.float32) * (1 - obj_anchor_masks[d])
                     probabilities = tf.cast(tf.one_hot(tf.cast(target_anchor_masks[d][..., 4], dtype=tf.int32), CLS_CNT) * 10.0, dtype=tf.float32)
                     output_from_mask[d] = tf.concat([tx_ty, tw_th, to, probabilities], axis=-1) 
 
@@ -69,77 +70,6 @@ def main():
                                             
                                     data_loader.onehot_to_name,
                                     data_loader.imgs["validation"][img_id]["objs"])
-
-    def _test_learning_one_img():
-
-        # BEFORE RUNNING: 
-        # make sure training takes place only on the first img
-
-        data_loader = DataLoader(cache_key="mouse_keyboard_tv_laptop", classes=["mouse", "keyboard", "tv", "laptop"], superclasses=[])
-        data_loader.load_info()
-        data_loader.determine_anchors()
-        data_loader.assign_anchors_to_objects()
-
-        def _lr_sched(epoch, lr):
-
-            if epoch < 800:
-                return 1e-4
-
-            elif epoch < 1600:
-                return 1e-5
-
-            else:
-                return 1e-6
-
-        model = Network(data_loader, cache_idx="overfit1")
-        model.build_components(backbone="small", optimizer=tf.optimizers.Adam(learning_rate=1e-4), lr_scheduler=_lr_sched)
-        
-        model.train(1715, 1)
-
-        for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_loader.load_data(1, "train"):
-
-            out_scale1, out_scale2, out_scale3 = model.full_network(img)
-
-            loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale1, bool_mask_size1, target_mask_size1)
-            print(loss_value, noobj, obj, cl, xy, wh)
-            loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale2, bool_mask_size2, target_mask_size2)
-            print(loss_value, noobj, obj, cl, xy, wh)
-            loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale3, bool_mask_size3, target_mask_size3)
-            print(loss_value, noobj, obj, cl, xy, wh)
-
-            anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_loader.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
-        
-            output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, anchors_relative[0], 0.6)
-            output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, anchors_relative[1], 0.6)
-            output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = make_prediction_perscale(out_scale3, anchors_relative[2], 0.6)
-
-            output_xy_min = [output_xy_min_scale0, output_xy_min_scale1, output_xy_min_scale2]
-            output_xy_max = [output_xy_max_scale0, output_xy_max_scale1, output_xy_max_scale2]
-            output_class = [output_class_scale0, output_class_scale1, output_class_scale2]
-            output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
-
-            show_prediction(np.array(img[0]), output_xy_min, output_xy_max, output_class, output_class_maxp, data_loader.onehot_to_name)
-
-            break
-
-    def _plot_model_stats():
-
-        data_loader = DataLoader(train_data_path=DataLoader.VALIDATION_DATA_PATH, train_info_path=DataLoader.VALIDATION_INFO_PATH)
-        data_loader.load_info()
-        data_loader.determine_anchors()
-        data_loader.assign_anchors_to_objects()
-
-        model = Network(data_loader)
-        model.build_components()
-
-        model.show_architecture_stats()
-
-    def _test_cache():
-
-        data_loader = DataLoader(cache_key="base")
-        data_loader.load_info()
-        data_loader.determine_anchors()
-        data_loader.assign_anchors_to_objects()
 
     def _test_learning_few_img():
 
@@ -166,16 +96,19 @@ def main():
         
         model.train(1700, FEW)
 
-        for (img, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in data_loader.load_data(FEW, "train"):
+        for (img, obj_mask_size1, ignored_mask_size1, target_mask_size1, \
+                    obj_mask_size2, ignored_mask_size2, target_mask_size2, \
+                    obj_mask_size3, ignored_mask_size3, target_mask_size3) in data_loader.load_data(FEW, "train"):
+
             for idx in range(img.shape[0]):
 
                 out_scale1, out_scale2, out_scale3 = model.full_network(img[idx: idx + 1])
 
-                loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale1, bool_mask_size1[idx: idx + 1], target_mask_size1[idx: idx + 1])
+                loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale1, obj_mask_size1[idx: idx + 1], ignored_mask_size1[idx: idx + 1], target_mask_size1[idx: idx + 1])
                 print(loss_value, noobj, obj, cl, xy, wh)
-                loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale2, bool_mask_size2[idx: idx + 1], target_mask_size2[idx: idx + 1])
+                loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale2, obj_mask_size2[idx: idx + 1], ignored_mask_size2[idx: idx + 1], target_mask_size2[idx: idx + 1])
                 print(loss_value, noobj, obj, cl, xy, wh)
-                loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale3, bool_mask_size3[idx: idx + 1], target_mask_size3[idx: idx + 1])
+                loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale3, obj_mask_size3[idx: idx + 1], ignored_mask_size3[idx: idx + 1], target_mask_size3[idx: idx + 1])
                 print(loss_value, noobj, obj, cl, xy, wh)
 
                 anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_loader.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
@@ -195,9 +128,7 @@ def main():
 
     def _run_training():
 
-        data_loader = DataLoader(cache_key="all_orgval", classes=[], superclasses=["person", "vehicle", "outdoor", "animal", "accessory", \
-                                                                            "sports", "kitchen", "food", "furniture", "electronic", \
-                                                                            "appliance", "indoor"], validation_ratio=False)
+        data_loader = DataLoader(cache_key="all")
         data_loader.load_info()
         data_loader.determine_anchors()
         data_loader.assign_anchors_to_objects()
@@ -213,23 +144,17 @@ def main():
         lr_sched = Lr_absolute_sched(lrs)
         ch_sched = Minloss_checkpoint([x for x in range(10, 160, 10)])
 
-        model = Network(data_loader, cache_idx="afull64_default_val")
+        model = Network(data_loader, cache_idx="afull")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), lr_scheduler=lr_sched)
         model.train(160, 64, progbar=True, checkpoint_sched=ch_sched, copy_at_checkpoint=False)
 
     def _show_stats():
 
-        data_loader = DataLoader(cache_key="all", classes=[], superclasses=["person", "vehicle", "outdoor", "animal", "accessory", \
-                                                                            "sports", "kitchen", "food", "furniture", "electronic", \
-                                                                            "appliance", "indoor"], validation_ratio=0.2)
+        data_loader = DataLoader(cache_key="all")
         model = Network(data_loader, cache_idx="afull")
         model.plot_stats(show_on_screen=True, save_image=False)
 
     #_test_mask_encoding()
-    #_test_learning_one_img()
-    #_plot_model_stats()
-    #_test_cache()
-    #_test_train()
     #_test_learning_few_img()
     #_run_training()
     _show_stats()

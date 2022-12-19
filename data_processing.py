@@ -21,7 +21,7 @@ class DataLoader:
                                         "sports", "kitchen", "food", "furniture", "electronic", \
                                         "appliance", "indoor"],
                         classes=[],
-                        validation_ratio=0.2,
+                        validation_ratio=None,
                     ):
 
         assert(cache_key != TMP_CACHE_KEY)
@@ -151,16 +151,19 @@ class DataLoader:
 
         for gt_batch_idx in range(GT_BATCH_CNT):
 
-            bool_masks, target_masks = self.cache_manager.get_gt_batch(gt_batch_idx, purpose)
+            obj_masks, ignored_masks, target_masks = self.cache_manager.get_gt_batch(gt_batch_idx, purpose)
 
             for local_slice_idx in range(DATA_BATCH_PER_GT_BATCH):
                 slice_idx = local_slice_idx * DATA_LOAD_BATCH_SIZE
 
-                yield bool_masks[0][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                yield obj_masks[0][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                        ignored_masks[0][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
                         target_masks[0][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
-                        bool_masks[1][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                        obj_masks[1][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                        ignored_masks[1][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
                         target_masks[1][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
-                        bool_masks[2][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                        obj_masks[2][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                        ignored_masks[2][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
                         target_masks[2][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE]
 
         if incomplete is True:
@@ -170,7 +173,7 @@ class DataLoader:
             else:
                 gt_batch_idx += 1
 
-            bool_masks, target_masks = self.cache_manager.get_gt_batch(gt_batch_idx, purpose)
+            obj_masks, ignored_masks, target_masks = self.cache_manager.get_gt_batch(gt_batch_idx, purpose)
 
             rem = IMG_CNT % GT_LOAD_BATCH_SIZE
 
@@ -178,20 +181,26 @@ class DataLoader:
             while True:
 
                 if slice_idx + DATA_LOAD_BATCH_SIZE >= rem:
-                    yield bool_masks[0][slice_idx:], \
+                    yield obj_masks[0][slice_idx:], \
+                            ignored_masks[0][slice_idx:], \
                             target_masks[0][slice_idx:], \
-                            bool_masks[1][slice_idx:], \
+                            obj_masks[1][slice_idx:], \
+                            ignored_masks[1][slice_idx:], \
                             target_masks[1][slice_idx:], \
-                            bool_masks[2][slice_idx:], \
+                            obj_masks[2][slice_idx:], \
+                            ignored_masks[2][slice_idx:], \
                             target_masks[2][slice_idx:]
                     break
 
                 else:
-                    yield bool_masks[0][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                    yield obj_masks[0][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                            ignored_masks[0][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
                             target_masks[0][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
-                            bool_masks[1][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                            obj_masks[1][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                            ignored_masks[1][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
                             target_masks[1][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
-                            bool_masks[2][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                            obj_masks[2][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
+                            ignored_masks[2][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE], \
                             target_masks[2][slice_idx: slice_idx + DATA_LOAD_BATCH_SIZE]
 
                     slice_idx += DATA_LOAD_BATCH_SIZE
@@ -214,7 +223,9 @@ class DataLoader:
         gt_generator = self.load_gt(purpose)
         for imgs in self.load_images(purpose):
 
-            bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3 = next(gt_generator)
+            obj_mask_size1, ignored_mask_size1, target_mask_size1, \
+            obj_mask_size2, ignored_mask_size2, target_mask_size2, \
+            obj_mask_size3, ignored_mask_size3, target_mask_size3 = next(gt_generator)
 
             if imgs.shape[0] == DATA_LOAD_BATCH_SIZE:
 
@@ -223,7 +234,10 @@ class DataLoader:
                     lo = idx * batch_size
                     hi = (idx + 1) * batch_size
 
-                    yield (tf.cast(imgs[lo: hi], tf.float32) / 255.0) * 2.0 - 1.0, bool_mask_size1[lo: hi], target_mask_size1[lo: hi], bool_mask_size2[lo: hi], target_mask_size2[lo: hi], bool_mask_size3[lo: hi], target_mask_size3[lo: hi]
+                    yield (tf.cast(imgs[lo: hi], tf.float32) / 255.0) * 2.0 - 1.0, \
+                            obj_mask_size1[lo: hi], ignored_mask_size1[lo: hi], target_mask_size1[lo: hi], \
+                            obj_mask_size2[lo: hi], ignored_mask_size2[lo: hi], target_mask_size2[lo: hi], \
+                            obj_mask_size3[lo: hi], ignored_mask_size3[lo: hi], target_mask_size3[lo: hi]
             
             else:
 
@@ -234,10 +248,16 @@ class DataLoader:
                     lo = idx * batch_size
                     hi = (idx + 1) * batch_size
 
-                    yield (tf.cast(imgs[lo: hi], tf.float32) / 255.0) * 2.0 - 1.0, bool_mask_size1[lo: hi], target_mask_size1[lo: hi], bool_mask_size2[lo: hi], target_mask_size2[lo: hi], bool_mask_size3[lo: hi], target_mask_size3[lo: hi]
+                    yield (tf.cast(imgs[lo: hi], tf.float32) / 255.0) * 2.0 - 1.0, \
+                            obj_mask_size1[lo: hi], ignored_mask_size1[lo: hi], target_mask_size1[lo: hi], \
+                            obj_mask_size2[lo: hi], ignored_mask_size2[lo: hi], target_mask_size2[lo: hi], \
+                            obj_mask_size3[lo: hi], ignored_mask_size3[lo: hi], target_mask_size3[lo: hi]
 
                 lo = limit * batch_size
-                yield (tf.cast(imgs[lo:], tf.float32) / 255.0) * 2.0 - 1.0, bool_mask_size1[lo:], target_mask_size1[lo:], bool_mask_size2[lo:], target_mask_size2[lo:], bool_mask_size3[lo:], target_mask_size3[lo:]
+                yield (tf.cast(imgs[lo:], tf.float32) / 255.0) * 2.0 - 1.0, \
+                        obj_mask_size1[lo:], ignored_mask_size1[lo:], target_mask_size1[lo:], \
+                        obj_mask_size2[lo:], ignored_mask_size2[lo:], target_mask_size2[lo:], \
+                        obj_mask_size3[lo:], ignored_mask_size3[lo:], target_mask_size3[lo:]
 
     def load_info(self):
         '''
@@ -432,10 +452,18 @@ class DataLoader:
 
         for purpose in ["train", "validation"]:
             
-            bool_anchor_masks = [[] for _ in range(SCALE_CNT)]     
+            obj_anchor_masks = [[] for _ in range(SCALE_CNT)]     
             '''
                     for each scale,
                         B x S[scale] x S[scale] x A x 1     - whether that anchor is responsible for an object or not
+            '''
+            ignored_anchor_masks = [[] for _ in range(SCALE_CNT)]     
+            '''
+                    for each scale,
+                        B x S[scale] x S[scale] x A x 1     - whether that anchor is ignored or not
+            '''
+            '''
+                NOTE: when computing loss, the no-obj mask is equal to (1 - obj mask - ignored mask)
             '''
             target_anchor_masks = [[] for _ in range(SCALE_CNT)]
             '''
@@ -446,12 +474,14 @@ class DataLoader:
             gt_batch_idx = 0
             for img_id in self.imgs[purpose].keys():
 
-                bool_mask = []
+                obj_mask = []
+                ignored_mask = []
                 target_mask = []
 
                 for d in range(SCALE_CNT):
 
-                    bool_mask.append(np.array([[[[0] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])], dtype=np.float64))
+                    obj_mask.append(np.array([[[[0] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])], dtype=np.float64))
+                    ignored_mask.append(np.array([[[[0] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])], dtype=np.float64))
                     target_mask.append(np.array([[[[0 for _ in range(5)] for _ in range(ANCHOR_PERSCALE_CNT)] for _ in range(GRID_CELL_CNT[d])] for _ in range(GRID_CELL_CNT[d])], dtype=np.float64))
 
                 for bbox_d in self.imgs[purpose][img_id]["objs"]:
@@ -463,15 +493,21 @@ class DataLoader:
                     max_iou_idx = None
                     max_iou_scale = None
 
+                    ignore_anchors = []
+
                     for d in range(SCALE_CNT):
                         for a in range(ANCHOR_PERSCALE_CNT):
 
                             current_iou = _iou(self.anchors[d][a], w, h)
+
                             if current_iou > max_iou:
                                 
                                 max_iou = current_iou
                                 max_iou_idx = a
                                 max_iou_scale = d
+
+                            if current_iou >= IGNORED_ANCHOR_IOU_THRESHOLD:
+                                ignore_anchors.append((a, d))
 
                     x, y = x + w // 2, y + h // 2
                     x, y, w, h = x / IMG_SIZE[0], y / IMG_SIZE[0], w / IMG_SIZE[0], h / IMG_SIZE[0]
@@ -490,13 +526,16 @@ class DataLoader:
                     anchor_w = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][0] / IMG_SIZE[0])
                     anchor_h = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][1] / IMG_SIZE[0])
 
-                    bool_mask[max_iou_scale][cx][cy][max_iou_idx] = np.array([1.0], dtype=np.float64)
+                    obj_mask[max_iou_scale][cx][cy][max_iou_idx] = [1.0]
                     target_mask[max_iou_scale][cx][cy][max_iou_idx] = np.array(tf.concat([tf.convert_to_tensor([tf.math.log(x / (1 - x))]), 
                                                                                             tf.convert_to_tensor([tf.math.log(y / (1 - y))]),
                                                                                             tf.convert_to_tensor([tf.math.log(w / anchor_w)]), 
                                                                                             tf.convert_to_tensor([tf.math.log(h / anchor_h)]),
                                                                                             tf.convert_to_tensor([categ], dtype=tf.double)],
                                                                                             axis=0), dtype=np.float64)
+
+                    for a_idx, a_scale in ignore_anchors:
+                        ignored_mask[a_scale][cx][cy][a_idx] = [1]
 
                     if tf.reduce_sum(tf.cast(tf.math.is_nan(target_mask[max_iou_scale][cx][cy][max_iou_idx]), tf.int32)) > 0:
                         tf.print("Nan found when assigning anchors; possible error?")
@@ -507,20 +546,33 @@ class DataLoader:
                         quit()
 
                 for d in range(SCALE_CNT):
+                    for cx in range(GRID_CELL_CNT[d]):
+                        for cy in range(GRID_CELL_CNT[d]):
+                            for a_idx in range(ANCHOR_PERSCALE_CNT):
 
-                    bool_anchor_masks[d].append(tf.convert_to_tensor(bool_mask[d], dtype=tf.float32))
+                                if (obj_mask[d][cx][cy][a_idx] == [0]) and (ignored_anchor_masks[d][cx][cy][a_idx] == [1]):
+                                    ignored_anchor_masks[d][cx][cy][a_idx] = [1.0]
+                                else:
+                                    ignored_anchor_masks[d][cx][cy][a_idx] = [0.0]
+
+                for d in range(SCALE_CNT):
+
+                    obj_anchor_masks[d].append(tf.convert_to_tensor(obj_mask[d], dtype=tf.float32))
+                    ignored_anchor_masks[d].append(tf.convert_to_tensor(ignored_mask[d], dtype=tf.float32))
                     target_anchor_masks[d].append(tf.convert_to_tensor(target_mask[d], dtype=tf.float32))
 
-                if len(bool_anchor_masks[0]) == GT_LOAD_BATCH_SIZE:
+                if len(obj_anchor_masks[0]) == GT_LOAD_BATCH_SIZE:
 
-                    self.cache_manager.store_gt(bool_anchor_masks, target_anchor_masks, purpose, gt_batch_idx)
+                    self.cache_manager.store_gt(obj_anchor_masks, ignored_anchor_masks, target_anchor_masks, purpose, gt_batch_idx)
 
-                    bool_anchor_masks = [[] for _ in range(SCALE_CNT)]
+                    obj_anchor_masks = [[] for _ in range(SCALE_CNT)]
+                    ignored_anchor_masks = [[] for _ in range(SCALE_CNT)]
                     target_anchor_masks = [[] for _ in range(SCALE_CNT)]
+
                     gt_batch_idx += 1
 
-            if len(bool_anchor_masks[0]) > 0:
-                self.cache_manager.store_gt(bool_anchor_masks, target_anchor_masks, purpose, gt_batch_idx)
+            if len(obj_anchor_masks[0]) > 0:
+                self.cache_manager.store_gt(obj_anchor_masks, ignored_anchor_masks, target_anchor_masks, purpose, gt_batch_idx)
 
 class DataCacheManager:
 
@@ -633,7 +685,8 @@ class DataCacheManager:
 
             if COMPRESS_GT_CACHE_LEVEL != 0:
                 return (pickle.loads(zlib.decompress(self._permanent_gt[purpose][gt_batch_idx][0])), \
-                        pickle.loads(zlib.decompress(self._permanent_gt[purpose][gt_batch_idx][1])))
+                        pickle.loads(zlib.decompress(self._permanent_gt[purpose][gt_batch_idx][1])), \
+                        pickle.loads(zlib.decompress(self._permanent_gt[purpose][gt_batch_idx][2])))
 
             else:
                 return self._permanent_gt[purpose][gt_batch_idx]
@@ -645,9 +698,13 @@ class DataCacheManager:
             else:
                 cache_key = self.cache_key
 
-            with open(f"{DATA_CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+            with open(f"{DATA_CACHE_PATH}{cache_key}_obj_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
-            bool_masks = pickle.loads(zlib.decompress(raw_cache))
+            obj_masks = pickle.loads(zlib.decompress(raw_cache))
+
+            with open(f"{DATA_CACHE_PATH}{cache_key}_ignored_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                raw_cache = cache_f.read()
+            ignored_masks = pickle.loads(zlib.decompress(raw_cache))
 
             with open(f"{DATA_CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
@@ -656,12 +713,13 @@ class DataCacheManager:
             if len(self._permanent_gt["train"]) + len(self._permanent_gt["validation"]) < PERMANENT_GT_BATCHES:
 
                 if COMPRESS_GT_CACHE_LEVEL != 0:
-                    self._permanent_gt[purpose][gt_batch_idx] = (zlib.compress(pickle.dumps(bool_masks), COMPRESS_GT_CACHE_LEVEL), \
+                    self._permanent_gt[purpose][gt_batch_idx] = (zlib.compress(pickle.dumps(obj_masks), COMPRESS_GT_CACHE_LEVEL), \
+                                                                    zlib.compress(pickle.dumps(ignored_masks), COMPRESS_GT_CACHE_LEVEL), \
                                                                     zlib.compress(pickle.dumps(target_masks), COMPRESS_GT_CACHE_LEVEL))
                 else:
-                    self._permanent_gt[purpose][gt_batch_idx] = (bool_masks, target_masks)
+                    self._permanent_gt[purpose][gt_batch_idx] = (obj_masks, ignored_masks, target_masks)
 
-            return (bool_masks, target_masks)
+            return (obj_masks, ignored_masks, target_masks)
 
     def check_gt(self):
 
@@ -678,7 +736,10 @@ class DataCacheManager:
 
                     for gt_batch_idx in range(GT_BATCH_CNT):
 
-                        with open(f"{DATA_CACHE_PATH}{self.cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                        with open(f"{DATA_CACHE_PATH}{self.cache_key}_obj_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
+                            pass
+
+                        with open(f"{DATA_CACHE_PATH}{self.cache_key}_ignored_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                             pass
 
                         with open(f"{DATA_CACHE_PATH}{self.cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
@@ -693,7 +754,7 @@ class DataCacheManager:
         
         return False
 
-    def store_gt(self, bool_gt, target_gt, purpose, gt_batch_idx):
+    def store_gt(self, obj_gt, ignored_gt, target_gt, purpose, gt_batch_idx):
 
         if self.cache_key is None:
             cache_key = TMP_CACHE_KEY
@@ -702,12 +763,18 @@ class DataCacheManager:
 
         for d in range(SCALE_CNT):
 
-            bool_gt[d] = tf.convert_to_tensor(bool_gt[d], dtype=tf.float32)
+            obj_gt[d] = tf.convert_to_tensor(obj_gt[d], dtype=tf.float32)
+            ignored_gt[d] = tf.convert_to_tensor(ignored_gt[d], dtype=tf.float32)
             target_gt[d] = tf.convert_to_tensor(target_gt[d], dtype=tf.float32)
 
-        new_cache = zlib.compress(pickle.dumps(bool_gt), 1)
+        new_cache = zlib.compress(pickle.dumps(obj_gt), 1)
 
-        with open(f"{DATA_CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
+        with open(f"{DATA_CACHE_PATH}{cache_key}_obj_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
+            cache_f.write(new_cache)
+
+        new_cache = zlib.compress(pickle.dumps(ignored_gt), 1)
+
+        with open(f"{DATA_CACHE_PATH}{cache_key}_ignored_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
             cache_f.write(new_cache)
 
         new_cache = zlib.compress(pickle.dumps(target_gt), 1)

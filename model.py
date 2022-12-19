@@ -378,17 +378,17 @@ class Network:
                 # train loop
 
                 batch_idx = 0
-                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_loader.load_data(TRAIN_BATCH_SIZE, "train"):
+                for (imgs, obj_mask_size1, ignored_mask_size1, target_mask_size1, \
+                            obj_mask_size2, ignored_mask_size2, target_mask_size2, \
+                            obj_mask_size3, ignored_mask_size3, target_mask_size3) in self.data_loader.load_data(TRAIN_BATCH_SIZE, "train"):
 
                     with tf.GradientTape() as tape:
                     
                         out_s1, out_s2, out_s3 = self.full_network(imgs, training=True)
 
-                        loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
-
-                        loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
-
-                        loss_value__, noobj__, obj__, cl__, xy__, wh__ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
+                        loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_s1, obj_mask_size1, ignored_mask_size1, target_mask_size1)
+                        loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, obj_mask_size2, ignored_mask_size2, target_mask_size2)
+                        loss_value__, noobj__, obj__, cl__, xy__, wh__ = yolov3_loss_perscale(out_s3, obj_mask_size3, ignored_mask_size3, target_mask_size3)
 
                         loss_value += loss_value_ + loss_value__
                         noobj += noobj_ + noobj__
@@ -417,11 +417,13 @@ class Network:
 
                 # validation loop
 
-                for (imgs, bool_mask_size1, target_mask_size1, bool_mask_size2, target_mask_size2, bool_mask_size3, target_mask_size3) in self.data_loader.load_data(VALIDATION_BATCH_SIZE, "validation"):
+                for (imgs, obj_mask_size1, ignored_mask_size1, target_mask_size1, \
+                            obj_mask_size2, ignored_mask_size2, target_mask_size2, \
+                            obj_mask_size3, ignored_mask_size3, target_mask_size3) in self.data_loader.load_data(VALIDATION_BATCH_SIZE, "validation"):
                     
                     out_s1, out_s2, out_s3 = self.full_network(imgs, training=False)
 
-                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s1, bool_mask_size1, target_mask_size1)
+                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s1, obj_mask_size1, ignored_mask_size1, target_mask_size1)
                     val_loss += loss_value_
                     val_loss_noobj += noobj_
                     val_loss_obj += obj_
@@ -429,7 +431,7 @@ class Network:
                     val_loss_xy += xy_
                     val_loss_wh += wh_
 
-                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, bool_mask_size2, target_mask_size2)
+                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s2, obj_mask_size2, ignored_mask_size2, target_mask_size2)
                     val_loss += loss_value_
                     val_loss_noobj += noobj_
                     val_loss_obj += obj_
@@ -437,7 +439,7 @@ class Network:
                     val_loss_xy += xy_
                     val_loss_wh += wh_
                     
-                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s3, bool_mask_size3, target_mask_size3)
+                    loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(out_s3, obj_mask_size3, ignored_mask_size3, target_mask_size3)
                     val_loss += loss_value_
                     val_loss_noobj += noobj_
                     val_loss_obj += obj_
@@ -503,7 +505,7 @@ class Network:
             tf.print("Network not yet initialized")
             return
 
-        for (img, _, _, _, _, _, _) in self.data_loader.load_data(1, "validation"):
+        for (img, _, _, _, _, _, _, _, _, _) in self.data_loader.load_data(1, "validation"):
 
             out_scale1, out_scale2, out_scale3 = self.full_network(img, training=False)
 

@@ -123,6 +123,11 @@ ANCHOR_PERSCALE_CNT = 3
     numbers of anchor types per scale (A dimension)
 '''
 
+IGNORED_ANCHOR_IOU_THRESHOLD = 0.5
+'''
+    min IOU for non-assigned anchors to be completely ignored
+'''
+
 CLASS_TO_COLOR = [(255, 0, 0), (0, 0, 255), (0, 255, 0), (0, 0, 0), (255, 0, 255), (255, 255, 0), (0, 255, 255), (165, 42, 42), (255, 140, 0), (255, 255, 255)] * 10
 '''
     class one hot encoding idx to color
