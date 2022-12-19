@@ -10,9 +10,6 @@ from anchor_kmeans import *
 from utils import *
 
 class DataLoader:
-    '''
-        NOTE: implementation adapted for object detection with single-label classification (for simplicity)
-    '''
 
     def __init__(self, train_data_path=TRAIN_DATA_PATH,
                         train_info_path=TRAIN_INFO_PATH,
@@ -20,7 +17,9 @@ class DataLoader:
                         validation_info_path=VALIDATION_INFO_PATH,
 
                         cache_key=None,
-                        superclasses=["food"],
+                        superclasses=["person", "vehicle", "outdoor", "animal", "accessory", \
+                                        "sports", "kitchen", "food", "furniture", "electronic", \
+                                        "appliance", "indoor"],
                         classes=[],
                         validation_ratio=0.2,
                     ):
@@ -648,11 +647,11 @@ class DataCacheManager:
 
             with open(f"{DATA_CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
-            bool_masks = pickle.loads(raw_cache)
+            bool_masks = pickle.loads(zlib.decompress(raw_cache))
 
             with open(f"{DATA_CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
-            target_masks = pickle.loads(raw_cache)
+            target_masks = pickle.loads(zlib.decompress(raw_cache))
 
             if len(self._permanent_gt["train"]) + len(self._permanent_gt["validation"]) < PERMANENT_GT_BATCHES:
 
@@ -706,12 +705,12 @@ class DataCacheManager:
             bool_gt[d] = tf.convert_to_tensor(bool_gt[d], dtype=tf.float32)
             target_gt[d] = tf.convert_to_tensor(target_gt[d], dtype=tf.float32)
 
-        new_cache = pickle.dumps(bool_gt)
+        new_cache = zlib.compress(pickle.dumps(bool_gt), 1)
 
         with open(f"{DATA_CACHE_PATH}{cache_key}_bool_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
             cache_f.write(new_cache)
 
-        new_cache = pickle.dumps(target_gt)
+        new_cache = zlib.compress(pickle.dumps(target_gt), 1)
 
         with open(f"{DATA_CACHE_PATH}{cache_key}_target_masks_{purpose}_{gt_batch_idx}.bin", "wb+") as cache_f:
             cache_f.write(new_cache)
