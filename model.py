@@ -526,9 +526,9 @@ class Network:
                     sum_loss_xy += xy
                     sum_loss_wh += wh
 
-                    #break
+                    break
 
-                #continue
+                continue
 
                 # validation loop
 
@@ -751,6 +751,13 @@ class NetworkCacheManager:
 
             try:
 
+                with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_status.json", "r") as status_f:
+                    status = json.load(status_f)
+
+                self.network.next_train_epoch = status["next_epoch"]
+                self.network.next_pretrain_epoch = status["next_pretrain_epoch"]
+                self.network._status = status["state"]
+
                 self.network.full_network = tf.keras.models.load_model(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_model", custom_objects={
                                                                                                                                                     "ConvLayer": ConvLayer,
                                                                                                                                                     "ResBlock": ResBlock, 
@@ -784,13 +791,6 @@ class NetworkCacheManager:
                 noop = [tf.zeros_like(w) for w in ws]
                 self.network.encoder.optimizer.apply_gradients(zip(noop, ws))
                 self.network.encoder.optimizer.set_weights(opt_w)
-
-                with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_status.json", "r") as status_f:
-                    status = json.load(status_f)
-
-                self.network.next_train_epoch = status["next_epoch"]
-                self.network.next_pretrain_epoch = status["next_pretrain_epoch"]
-                self.network._status = status["state"]
 
                 tf.print(f"Model with cache key {self.cache_key} (idx {self.cache_idx}) has been found and loaded.")
                 

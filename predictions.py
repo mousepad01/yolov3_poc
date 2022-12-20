@@ -102,7 +102,7 @@ def show_prediction(image, pred_xy_min, pred_xy_max, pred_class, pred_class_p, c
         pred_class_p[d] = tf.reshape(pred_class_p[d], (-1))
 
     SHOW_RESIZE_FACTOR = 2.3
-    image =  cv.resize(image, (int(IMG_SIZE[0] * SHOW_RESIZE_FACTOR), int(IMG_SIZE[0] * SHOW_RESIZE_FACTOR)))
+    image =  cv.resize(image, (int(IMG_SIZE[0] * SHOW_RESIZE_FACTOR), int(IMG_SIZE[1] * SHOW_RESIZE_FACTOR)))
 
     # if there is ground truth, first show it
     if ground_truth_info is not None:

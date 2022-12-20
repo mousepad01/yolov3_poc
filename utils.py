@@ -125,7 +125,7 @@ MIN_BBOX_DIM = 3
     to filter ground truth
 '''
 
-PRETRAIN_BOX_SIZE = (256, 256)
+PRETRAIN_BOX_SIZE = (128, 128)
 '''
     size for input in classification pre-training of backbone
 '''
