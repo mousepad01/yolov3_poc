@@ -72,3 +72,10 @@ def yolov3_loss_perscale(output, obj_mask, ignored_mask, target_mask):
     total_loss = no_object_loss + object_loss + classification_loss + coord_loss
     return total_loss, no_object_loss, object_loss, classification_loss, xy_loss, wh_loss
 
+@tf.function
+def encoder_loss(output, gt):
+    return tf.math.reduce_sum(tf.keras.losses.categorical_crossentropy(gt, output))
+
+@tf.function
+def encoder_accuracy(output, gt):
+    return tf.reduce_sum(tf.cast(tf.equal(tf.argmax(output, axis=-1), tf.argmax(gt, axis=-1)), dtype=tf.int32))

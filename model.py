@@ -2,25 +2,46 @@ from math import floor
 import numpy as np
 import tensorflow as tf
 import pickle
+import json
 
 from custom_keras import *
 from utils import *
-from loss import *
+from metrics import *
 from predictions import *
 from data_processing import *
 
 class Network:
 
+    '''
+        Network states
+    '''
+
+    NOT_CREATED = 0
+    UNTRAINED = 1
+    TRAINING_ENCODER = 2
+    TRAINING_DETECTION = 3
+
     def __init__(self, data_loader, cache_idx=None):
+
+        self._status = Network.NOT_CREATED
+        '''
+            internal status
+        '''
 
         self.data_loader: DataLoader = data_loader
         '''
             contains data info and all that stuff
         '''
 
-        self.next_training_epoch = 0
+        self.next_train_epoch = 0
         '''
-            the last training epoch that was executing when the model had been saved
+            the next epoch index to be executed when training (the full network)
+            (0 if the model is new)
+        '''
+
+        self.next_pretrain_epoch = 0
+        '''
+            the next epoch index to be executed when pr-training (the encoder)
             (0 if the model is new)
         '''
 
@@ -28,20 +49,15 @@ class Network:
         '''
             the cache manager
         '''
-
-        self.backbone: tf.keras.Model = None
+        
+        self.encoder: tf.keras.Model = None
         '''
-            backbone for feature extraction
-        '''
-
-        self.input_layer: tf.keras.layers.Layer = None
-        '''
-            416 x 416 x 3
+            the encoder (common backbone with the full network + a classifier head, and different input)
         '''
 
         self.full_network: tf.keras.Model = None
         '''
-            includes the full network for object detection (so, everything except backbone classification head)
+            full network for object detection 
         '''
 
         self.lr_scheduler: function = None
@@ -50,14 +66,41 @@ class Network:
             * NOTE: this function is not saved when the training is interrupred; it is best this function is defined stateless
         '''
 
+        self.pretrain_lr_scheduler: function = None
+        '''
+            schedule the learning rate during pre-training
+            * NOTE: this function is not saved when the training is interrupred; it is best this function is defined stateless
+        '''
+
     def copy_model(self, new_cache_idx):
         '''
             Copy model cache and its stats under new cache_idx (same cache_key)
         '''
 
+        if self._status is Network.NOT_CREATED:
+            tf.print("Model has not been created. Nothing to copy.")
+            return
+
         self.cache_manager.copy_model(new_cache_idx)
        
-    def build_components(self, optimizer: tf.keras.optimizers.Optimizer, lr_scheduler=lambda epoch, lr: lr, backbone="darknet-53", weight_decay=5e-4):
+    def _update_encoder_weights(self):
+        '''
+            internal method for transferring encoder weights 
+            from the encoder to the full network
+        '''
+
+        '''
+            NOTE: the classification head has 3 layers, and the first layer is the input,
+                    so the range is defined as follows
+        '''
+        for idx in range(1, len(self.encoder.layers) - 3):
+            
+            ws = self.encoder.get_layer(index=idx).get_weights()
+            self.full_network.get_layer(index=idx).set_weights(ws)
+
+    def build_components(self, optimizer: tf.keras.optimizers.Optimizer, pretrain_optimizer: tf.keras.optimizers.Optimizer, \
+                                lr_scheduler=lambda epoch, lr: lr, pretrain_lr_scheduler=lambda epoch, lr: lr, \
+                                backbone="darknet-53"):
         ''' 
             if there is already a saved model and cache is used, it loads that model
             if not, it builds the model  using the given parameters
@@ -67,7 +110,12 @@ class Network:
             * weight_decay: for all convolutions
         '''
 
+        if self._status > Network.NOT_CREATED:
+            tf.print("Model has already been created.")
+            return
+
         self.lr_scheduler = lr_scheduler
+        self.pretrain_lr_scheduler = pretrain_lr_scheduler
 
         self.cache_manager.get_model()
         if self.full_network is not None:
@@ -79,138 +127,22 @@ class Network:
 
         if backbone == "darknet-53":
         
-            # the backbone
-            input_img = tf.keras.layers.Input((IMG_SIZE[0], IMG_SIZE[1], 3))
-
-            conv_back1 = ConvLayer(32, 3, weight_decay)(input_img) # 416
-            res_back1 = ResSequence(64, 1, weight_decay)(conv_back1) # 208
-            res_back2 = ResSequence(128, 2, weight_decay)(res_back1) # 104
-            res_back3 = ResSequence(256, 8, weight_decay)(res_back2) # 52
-            res_back4 = ResSequence(512, 8, weight_decay)(res_back3) # 26
-            res_back5 = ResSequence(1024, 4, weight_decay)(res_back4) # 13
-
-            self.backbone = tf.keras.Model(inputs=input_img, outputs=res_back5)
-
-            # the entire network
-
-            # output for scale 1
-
-            features_scale1 = res_back5
-
-            conv_scale1_1 = ConvLayer(512, 1, weight_decay)(features_scale1)
-            conv_scale1_2 = ConvLayer(1024, 3, weight_decay)(conv_scale1_1)
-            conv_scale1_3 = ConvLayer(512, 1, weight_decay)(conv_scale1_2)
-            conv_scale1_4 = ConvLayer(1024, 3, weight_decay)(conv_scale1_3)
-            conv_scale1_5 = ConvLayer(512, 1, weight_decay)(conv_scale1_4)
-
-            conv_scale1_6 = ConvLayer(1024, 3, weight_decay)(conv_scale1_5)
-            output_scale1 = tf.keras.layers.Conv2D(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT),
-                                                    1, padding="same", kernel_regularizer=tf.keras.regularizers.l2(weight_decay))(conv_scale1_6)
-
-            # output for scale 2
-
-            conv_scale12 = ConvLayer(256, 1, weight_decay)(conv_scale1_5)
-            upsample_scale12 = tf.keras.layers.UpSampling2D((2, 2))(conv_scale12)
-            features_scale2 = tf.keras.layers.Concatenate(axis=-1)([res_back4, upsample_scale12])
-
-            conv_scale2_1 = ConvLayer(256, 1, weight_decay)(features_scale2)
-            conv_scale2_2 = ConvLayer(512, 3, weight_decay)(conv_scale2_1)
-            conv_scale2_3 = ConvLayer(256, 1, weight_decay)(conv_scale2_2)
-            conv_scale2_4 = ConvLayer(512, 3, weight_decay)(conv_scale2_3)
-            conv_scale2_5 = ConvLayer(256, 1, weight_decay)(conv_scale2_4)
-
-            conv_scale2_6 = ConvLayer(512, 3, weight_decay)(conv_scale2_5)
-            output_scale2 = tf.keras.layers.Conv2D(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT),
-                                                    1, padding="same", kernel_regularizer=tf.keras.regularizers.l2(weight_decay))(conv_scale2_6)
-
-            # output for scale 3
-
-            conv_scale23 = ConvLayer(128, 1, weight_decay)(conv_scale2_5)
-            upsample_scale23 = tf.keras.layers.UpSampling2D((2, 2))(conv_scale23)
-            features_scale3 = tf.keras.layers.Concatenate(axis=-1)([res_back3, upsample_scale23])
-
-            conv_scale3_1 = ConvLayer(128, 1, weight_decay)(features_scale3)
-            conv_scale3_2 = ConvLayer(256, 3, weight_decay)(conv_scale3_1)
-            conv_scale3_3 = ConvLayer(128, 1, weight_decay)(conv_scale3_2)
-            conv_scale3_4 = ConvLayer(256, 3, weight_decay)(conv_scale3_3)
-            conv_scale3_5 = ConvLayer(128, 1, weight_decay)(conv_scale3_4)
-
-            conv_scale3_6 = ConvLayer(256, 3, weight_decay)(conv_scale3_5)
-            output_scale3 = tf.keras.layers.Conv2D(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT),
-                                                    1, padding="same", kernel_regularizer=tf.keras.regularizers.l2(weight_decay))(conv_scale3_6)
-
-            self.full_network = tf.keras.Model(inputs=input_img, outputs=[output_scale1, output_scale2, output_scale3])
+            self.full_network = build_darknet53_full(CLASS_COUNT)
+            self.encoder = build_darknet53_encoder(CLASS_COUNT)
 
         elif backbone == "small":
 
-            # the backbone
-            input_img = tf.keras.layers.Input((IMG_SIZE[0], IMG_SIZE[1], 3))
-
-            conv_back1 = ConvLayer(16, 3, weight_decay)(input_img) # 416
-            res_back1 = ResSequence(32, 1, weight_decay)(conv_back1) # 208
-            res_back2 = ResSequence(64, 2, weight_decay)(res_back1) # 104
-            res_back3 = ResSequence(128, 4, weight_decay)(res_back2) # 52
-            res_back4 = ResSequence(256, 4, weight_decay)(res_back3) # 26
-            res_back5 = ResSequence(512, 2, weight_decay)(res_back4) # 13
-
-            self.backbone = tf.keras.Model(inputs=input_img, outputs=res_back5)
-
-            # the entire network
-
-            # output for scale 1
-
-            features_scale1 = res_back5
-
-            conv_scale1_1 = ConvLayer(256, 1, weight_decay)(features_scale1)
-            conv_scale1_2 = ConvLayer(512, 3, weight_decay)(conv_scale1_1)
-            #conv_scale1_3 = ConvLayer(256, 1)(conv_scale1_2)
-            #conv_scale1_4 = ConvLayer(512, 3)(conv_scale1_3)
-            conv_scale1_5 = ConvLayer(256, 1, weight_decay)(conv_scale1_2)
-
-            conv_scale1_6 = ConvLayer(512, 3, weight_decay)(conv_scale1_5)
-            output_scale1 = tf.keras.layers.Conv2D(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT),
-                                                    1, padding="same", kernel_regularizer=tf.keras.regularizers.l2(weight_decay))(conv_scale1_6)
-
-            # output for scale 2
-
-            conv_scale12 = ConvLayer(128, 1, weight_decay)(conv_scale1_5)
-            upsample_scale12 = tf.keras.layers.UpSampling2D((2, 2))(conv_scale12)
-            features_scale2 = tf.keras.layers.Concatenate(axis=-1)([res_back4, upsample_scale12])
-
-            conv_scale2_1 = ConvLayer(128, 1, weight_decay)(features_scale2)
-            conv_scale2_2 = ConvLayer(256, 3, weight_decay)(conv_scale2_1)
-            #conv_scale2_3 = ConvLayer(128, 1)(conv_scale2_2)
-            #conv_scale2_4 = ConvLayer(256, 3)(conv_scale2_3)
-            conv_scale2_5 = ConvLayer(128, 1, weight_decay)(conv_scale2_2)
-
-            conv_scale2_6 = ConvLayer(256, 3, weight_decay)(conv_scale2_5)
-            output_scale2 = tf.keras.layers.Conv2D(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT),
-                                                    1, padding="same", kernel_regularizer=tf.keras.regularizers.l2(weight_decay))(conv_scale2_6)
-
-            # output for scale 3
-
-            conv_scale23 = ConvLayer(64, 1, weight_decay)(conv_scale2_5)
-            upsample_scale23 = tf.keras.layers.UpSampling2D((2, 2))(conv_scale23)
-            features_scale3 = tf.keras.layers.Concatenate(axis=-1)([res_back3, upsample_scale23])
-
-            conv_scale3_1 = ConvLayer(64, 1, weight_decay)(features_scale3)
-            conv_scale3_2 = ConvLayer(128, 3, weight_decay)(conv_scale3_1)
-            #conv_scale3_3 = ConvLayer(64, 1)(conv_scale3_2)
-            #conv_scale3_4 = ConvLayer(128, 3)(conv_scale3_3)
-            conv_scale3_5 = ConvLayer(64, 1, weight_decay)(conv_scale3_2)
-
-            conv_scale3_6 = ConvLayer(128, 3, weight_decay)(conv_scale3_5)
-            output_scale3 = tf.keras.layers.Conv2D(ANCHOR_PERSCALE_CNT * (4 + 1 + CLASS_COUNT),
-                                                    1, padding="same", kernel_regularizer=tf.keras.regularizers.l2(weight_decay))(conv_scale3_6)
-
-            self.full_network = tf.keras.Model(inputs=input_img, outputs=[output_scale1, output_scale2, output_scale3])
+            self.full_network = build_small_full(CLASS_COUNT)
+            self.encoder = build_small_encoder(CLASS_COUNT)
 
         else:
             print("unknown backbone")
             quit()
         
         self.full_network.compile(optimizer=optimizer)
-        self.cache_manager.store_model(0)
+        self.encoder.compile(optimizer=pretrain_optimizer)
+
+        self._status = Network.UNTRAINED
 
     def plot_stats(self, show_on_screen=False, save_image=True):
         '''
@@ -227,49 +159,49 @@ class Network:
         _, ax = plt.subplots(3, 2)
 
         ax[0][0].plot([idx for idx in range(len(train_loss_stats))],
-                        train_loss_stats, label="train")
+                        train_loss_stats, label="train", color='blue')
         ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
-                        validation_loss_stats, label="val")
+                        validation_loss_stats, label="val", color='green')
         ax[0][0].grid(True)
         ax[0][0].set_title("total loss")
         ax[0][0].legend()
 
         ax[0][1].plot([idx for idx in range(len(train_loss_stats))],
-                        train_loss_stats_noobj, label="train")
+                        train_loss_stats_noobj, label="train", color='blue')
         ax[0][1].plot([idx for idx in range(len(validation_loss_stats))],
-                        validation_loss_stats_noobj, label="val")
+                        validation_loss_stats_noobj, label="val", color='green')
         ax[0][1].grid(True)
         ax[0][1].set_title("(no-)objectness loss")
         ax[0][1].legend()
 
         ax[1][0].plot([idx for idx in range(len(train_loss_stats))],
-                        train_loss_stats_obj, label="train")
+                        train_loss_stats_obj, label="train", color='blue')
         ax[1][0].plot([idx for idx in range(len(validation_loss_stats))],
-                        validation_loss_stats_obj, label="val")
+                        validation_loss_stats_obj, label="val", color='green')
         ax[1][0].grid(True)
         ax[1][0].set_title("objectness loss")
         ax[1][0].legend()
 
         ax[1][1].plot([idx for idx in range(len(train_loss_stats))],
-                        train_loss_stats_cl, label="train")
+                        train_loss_stats_cl, label="train", color='blue')
         ax[1][1].plot([idx for idx in range(len(validation_loss_stats))],
-                        validation_loss_stats_cl, label="val")
+                        validation_loss_stats_cl, label="val", color='green')
         ax[1][1].grid(True)
         ax[1][1].set_title("classification loss")
         ax[1][1].legend()
 
         ax[2][0].plot([idx for idx in range(len(train_loss_stats))],
-                        train_loss_stats_xy, label="train")
+                        train_loss_stats_xy, label="train", color='blue')
         ax[2][0].plot([idx for idx in range(len(validation_loss_stats))],
-                        validation_loss_stats_xy, label="val")
+                        validation_loss_stats_xy, label="val", color='green')
         ax[2][0].grid(True)
         ax[2][0].set_title("x-y loss")
         ax[2][0].legend()
 
         ax[2][1].plot([idx for idx in range(len(train_loss_stats))],
-                        train_loss_stats_wh, label="train")
+                        train_loss_stats_wh, label="train", color='blue')
         ax[2][1].plot([idx for idx in range(len(validation_loss_stats))],
-                        validation_loss_stats_wh, label="val")
+                        validation_loss_stats_wh, label="val", color='green')
         ax[2][1].grid(True)
         ax[2][1].set_title("w-h loss")
         ax[2][1].legend()
@@ -280,16 +212,199 @@ class Network:
         if show_on_screen:
             plt.show()
       
-    def train(self, epochs, batch_size, progbar=True, checkpoint_sched=lambda epoch, loss, vloss: False, copy_at_checkpoint=True):
+    def plot_pretrain_stats(self, show_on_screen=False, save_image=True):
         '''
-            * epochs: number of total epochs (effective number of epochs executed: epochs - self.next_training_epoch + 1)
+            loads AND shows the pre-train statistics under the cache_key, cache_idx entry
+            * show_on_screen: if True, show on screen
+            * save_image: if True, save as image in the TRAIN_STATS_PATH
+        '''
+
+        train_loss_stats, validation_loss_stats, train_accuracy_stats, validation_accuracy_stats = self.cache_manager.get_pretrain_stat()
+
+        _, ax = plt.subplots(1, 2)
+
+        ax[0][0].plot([idx for idx in range(len(train_loss_stats))],
+                        train_loss_stats, label="train", color='blue')
+        ax[0][0].plot([idx for idx in range(len(validation_loss_stats))],
+                        validation_loss_stats, label="val", color='green')
+        ax[0][0].grid(True)
+        ax[0][0].set_title("Loss")
+        ax[0][0].legend()
+
+        ax[0][1].plot([idx for idx in range(len(train_loss_stats))],
+                        train_accuracy_stats, label="train", color='blue')
+        ax[0][1].plot([idx for idx in range(len(validation_loss_stats))],
+                        validation_accuracy_stats, label="val", color='green')
+        ax[0][1].grid(True)
+        ax[0][1].set_title("Accuracy")
+        ax[0][1].legend()
+
+        if save_image:
+            self.cache_manager.store_pretrain_stats_fig()
+
+        if show_on_screen:
+            plt.show()
+
+    def pretrain_encoder(self, epochs, batch_size, progbar=True, checkpoint_sched=lambda epoch, loss, vloss: False, copy_at_checkpoint=True):
+        '''
+            * epochs: number of total epochs (effective number of epochs executed: epochs - self.next_train_epoch + 1)
             * batch_size: for training
             * checkpoint_sched: decide whether to create a checkpoint, after the end of an epoch
         '''
 
-        if self.full_network is None:
+        if self._status is Network.NOT_CREATED:
             tf.print("Network not yet initialized")
             return
+
+        if self._status > Network.TRAINING_ENCODER:
+            tf.print("Cannot train encoder after detection training has already started.")
+            return
+
+        self._status = Network.TRAINING_ENCODER
+
+        TRAIN_BATCH_SIZE = batch_size
+        VALIDATION_BATCH_SIZE = batch_size
+
+        TRAIN_IMG_CNT = self.data_loader.get_box_cnt("train")
+        VALIDATION_IMG_CNT = self.data_loader.get_box_cnt("validation")
+
+        TRAIN_BATCH_CNT = TRAIN_IMG_CNT // TRAIN_BATCH_SIZE
+        if TRAIN_IMG_CNT % TRAIN_BATCH_SIZE > 0:
+            TRAIN_BATCH_CNT += 1
+
+        VALIDATION_BATCH_CNT = VALIDATION_IMG_CNT // VALIDATION_BATCH_SIZE
+        if VALIDATION_IMG_CNT % VALIDATION_BATCH_SIZE > 0:
+            VALIDATION_BATCH_CNT += 1
+
+        train_loss_stats, validation_loss_stats, train_accuracy_stats, validation_accuracy_stats = self.cache_manager.get_stats()
+
+        def _to_output_t(x): 
+            return floor((x / TRAIN_IMG_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)
+
+        def _to_output_v(x):
+            return floor((x / VALIDATION_IMG_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)
+
+        def _log_show_losses():
+
+            train_accuracy_stats.append(_to_output_t(sum_acc))
+            train_loss_stats.append(_to_output_t(sum_loss))
+
+            validation_accuracy_stats.append(_to_output_v(val_acc))
+            validation_loss_stats.append(_to_output_v(val_loss))
+
+            #tf.print(f"\n===================================================================================================================\n")
+            tf.print(f"\nTrain loss:            {_to_output_t(sum_loss)}")
+            tf.print(f"\nTrain accuracy:        {_to_output_t(sum_acc)}")
+            tf.print(f"\n")
+            tf.print(f"\nValidation loss:       {_to_output_v(val_loss)}")
+            tf.print(f"\nValidation accuracy:   {_to_output_v(val_acc)}")
+            tf.print(f"\n===================================================================================================================\n")
+
+        for epoch in range(self.next_pretrain_epoch, epochs, 1):
+
+            try:
+                
+                new_lr = self.pretrain_lr_scheduler(epoch, self.encoder.optimizer.learning_rate)
+                self.encoder.optimizer.learning_rate = new_lr
+
+                if progbar:
+                    progbar_output = tf.keras.utils.Progbar(TRAIN_BATCH_CNT)
+                tf.print(f"\n(Pretrain) Epoch {epoch} (lr {new_lr}):")
+
+                # loss stats variables
+
+                sum_loss = 0
+                sum_acc = 0
+
+                val_loss = 0
+                val_acc = 0
+
+                # train loop
+
+                batch_idx = 0
+                for (imgs, gt) in self.data_loader.load_pretrain_data(TRAIN_BATCH_SIZE, "train"):
+
+                    with tf.GradientTape() as tape:
+                        
+                        out = self.encoder(imgs, training=True)
+                        loss_value = encoder_loss(out, gt)
+                        acc_value = encoder_accuracy(out, gt)
+
+                    gradients = tape.gradient(loss_value, self.encoder.trainable_weights)
+                    self.encoder.optimizer.apply_gradients(zip(gradients, self.encoder.trainable_weights))
+
+                    batch_idx += 1
+                    if progbar:
+                        progbar_output.update(batch_idx)
+
+                    sum_loss += loss_value
+                    sum_acc += acc_value
+
+                    #break
+
+                #continue
+
+                # validation loop
+
+                for (imgs, gt) in self.data_loader.load_pretrain_data(VALIDATION_BATCH_SIZE, "validation"):
+                    
+                    out = self.encoder(imgs, training=False)
+                    val_loss += encoder_loss(out, gt)
+                    val_acc += encoder_accuracy(out, gt)
+
+            except KeyboardInterrupt:
+
+                tf.print(f"\nPre-training paused at epoch {epoch}")
+
+                self.next_pretrain_epoch = epoch
+                self._update_encoder_weights()
+                self.cache_manager.store_model()
+
+                stats = [train_loss_stats, validation_loss_stats, train_accuracy_stats, validation_accuracy_stats]
+                self.cache_manager.store_pretrain_stats(stats)
+
+                return
+
+            _log_show_losses()
+
+            if checkpoint_sched(epoch, sum_loss, val_loss):
+                
+                self.next_pretrain_epoch = epoch + 1
+                self._update_encoder_weights()
+                self.cache_manager.store_model()
+
+                stats = [train_loss_stats, validation_loss_stats, train_accuracy_stats, validation_accuracy_stats]
+                self.cache_manager.store_pretrain_stats(stats)
+
+                if copy_at_checkpoint:
+                    vloss = _to_output_v(val_loss)
+                    self.cache_manager.copy_model(f"{self.cache_manager.cache_idx}_e{epoch}_vloss{vloss}")
+
+        if self.next_pretrain_epoch >= epochs:
+            tf.print(f"\nModel is already pre-trained (at least) {epochs} epochs.")
+
+        else:
+            tf.print(f"\nPre-raining is done ({epochs} epochs).")
+
+            self.next_pretrain_epoch = epochs
+            self._update_encoder_weights()
+            self.cache_manager.store_model()
+
+            stats = [train_loss_stats, validation_loss_stats, train_accuracy_stats, validation_accuracy_stats]
+            self.cache_manager.store_pretrain_stats(stats)
+
+    def train(self, epochs, batch_size, progbar=True, checkpoint_sched=lambda epoch, loss, vloss: False, copy_at_checkpoint=True):
+        '''
+            * epochs: number of total epochs (effective number of epochs executed: epochs - self.next_train_epoch + 1)
+            * batch_size: for training
+            * checkpoint_sched: decide whether to create a checkpoint, after the end of an epoch
+        '''
+
+        if self._status is Network.NOT_CREATED:
+            tf.print("Network not yet initialized")
+            return
+
+        self._status = Network.TRAINING_DETECTION
 
         TRAIN_BATCH_SIZE = batch_size
         VALIDATION_BATCH_SIZE = batch_size
@@ -348,7 +463,7 @@ class Network:
             tf.print(f"\nValidation w-h loss:             {_to_output_v(val_loss_wh)}")
             tf.print(f"\n===================================================================================================================\n")
 
-        for epoch in range(self.next_training_epoch, epochs, 1):
+        for epoch in range(self.next_train_epoch, epochs, 1):
 
             try:
                 
@@ -449,9 +564,10 @@ class Network:
 
             except KeyboardInterrupt:
 
-                tf.print(f"Training paused at epoch {epoch}")
+                tf.print(f"\nTraining paused at epoch {epoch}")
 
-                self.cache_manager.store_model(epoch)
+                self.next_train_epoch = epoch
+                self.cache_manager.store_model()
 
                 stats = [train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj,
                         train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh,
@@ -465,8 +581,9 @@ class Network:
             _log_show_losses()
 
             if checkpoint_sched(epoch, sum_loss, val_loss):
-
-                self.cache_manager.store_model(epoch + 1)
+                
+                self.next_train_epoch = epoch + 1
+                self.cache_manager.store_model()
 
                 stats = [train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj,
                             train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh,
@@ -479,13 +596,14 @@ class Network:
                     vloss = _to_output_v(val_loss)
                     self.cache_manager.copy_model(f"{self.cache_manager.cache_idx}_e{epoch}_vloss{vloss}")
 
-        if self.next_training_epoch >= epochs:
-            tf.print(f"Model is already trained (at least) {epochs} epochs.")
+        if self.next_train_epoch >= epochs:
+            tf.print(f"\nModel is already trained (at least) {epochs} epochs.")
 
         else:
             tf.print(f"\nTraining is done ({epochs} epochs).")
 
-            self.cache_manager.store_model(epochs)
+            self.next_train_epoch = epochs
+            self.cache_manager.store_model()
 
             stats = [train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj,
                     train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh,
@@ -495,13 +613,27 @@ class Network:
             self.cache_manager.store_stats(stats)
 
     def show_architecture_stats(self):
-
+        
         self.full_network.summary()
         tf.keras.utils.plot_model(self.full_network, show_shapes=True)
 
+    def stage(self):
+
+        if self._status is Network.NOT_CREATED:
+            tf.print("Network has not yet been initialized.")
+
+        elif self._status is Network.UNTRAINED:
+            tf.print("Network is not trained.")
+
+        elif self._status is Network.TRAINING_ENCODER:
+            tf.print(f"The encoder has been trained (for classification) {self.next_train_epoch} epochs.")
+
+        elif self._status is Network.TRAINING_DETECTION:
+            tf.print(f"Full network has been trained (for detection) {self.next_train_epoch} epochs.")
+
     def predict(self, threshold=0.6):
         
-        if self.full_network is None:
+        if self._status < Network.TRAINING_DETECTION:
             tf.print("Network not yet initialized")
             return
 
@@ -565,8 +697,14 @@ class NetworkCacheManager:
                 opt_w = opt_f.read()
                 opt_f_.write(opt_w)
 
-        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_next_epoch", "r") as last_epoch_f:
-            with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{new_cache_idx}_next_epoch", "w+") as last_epoch_f_:
+        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_pretrain_opt", "rb") as opt_f:
+            with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{new_cache_idx}_pretrain_opt", "wb+") as opt_f_:
+
+                opt_w = opt_f.read()
+                opt_f_.write(opt_w)
+
+        with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_status.json", "r") as last_epoch_f:
+            with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{new_cache_idx}_status.json", "w+") as last_epoch_f_:
 
                 training_epoch = last_epoch_f.read()
                 last_epoch_f_.write(training_epoch)
@@ -579,8 +717,22 @@ class NetworkCacheManager:
                                                         )
         tf.keras.models.save_model(full_network, f"{MODEL_CACHE_PATH}{self.cache_key}_{new_cache_idx}_model", overwrite=True)
 
+        encoder = tf.keras.models.load_model(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_pretrain_model", custom_objects={
+                                                                                                                                    "ConvLayer": ConvLayer,
+                                                                                                                                    "ResBlock": ResBlock, 
+                                                                                                                                    "ResSequence": ResSequence
+                                                                                                                                    }
+                                                        )
+        tf.keras.models.save_model(encoder, f"{MODEL_CACHE_PATH}{self.cache_key}_{new_cache_idx}_pretrain_model", overwrite=True)
+
         with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{self.cache_idx}_stats", "rb") as stats_f:
             with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{new_cache_idx}_stats", "wb+") as stats_f_:
+
+                stats = stats_f.read()
+                stats_f_.write(stats)
+
+        with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{self.cache_idx}_pretrain_stats", "rb") as stats_f:
+            with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{new_cache_idx}_pretrain_stats", "wb+") as stats_f_:
 
                 stats = stats_f.read()
                 stats_f_.write(stats)
@@ -598,10 +750,6 @@ class NetworkCacheManager:
         if self.cache_key is not None:
 
             try:
-                
-                with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_opt", "rb") as opt_f:
-                    opt_w = opt_f.read()
-                    opt_w = pickle.loads(opt_w)
 
                 self.network.full_network = tf.keras.models.load_model(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_model", custom_objects={
                                                                                                                                                     "ConvLayer": ConvLayer,
@@ -609,24 +757,47 @@ class NetworkCacheManager:
                                                                                                                                                     "ResSequence": ResSequence
                                                                                                                                                     }
                                                                 )
+                                                                
+                self.network.encoder = tf.keras.models.load_model(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_pretrain_model", custom_objects={
+                                                                                                                                                        "ConvLayer": ConvLayer,
+                                                                                                                                                        "ResBlock": ResBlock, 
+                                                                                                                                                        "ResSequence": ResSequence
+                                                                                                                                                        }
+                                                                    )
+
+                with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_opt", "rb") as opt_f:
+                    opt_w = opt_f.read()
+                    opt_w = pickle.loads(opt_w)
 
                 # hack to initialize weights for the optimizer, so that old ones can be loaded 
                 # https://github.com/keras-team/keras/issues/15298
                 ws = self.network.full_network.trainable_weights
                 noop = [tf.zeros_like(w) for w in ws]
                 self.network.full_network.optimizer.apply_gradients(zip(noop, ws))
-
                 self.network.full_network.optimizer.set_weights(opt_w)
 
-                with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_next_epoch", "r") as last_epoch_f:
-                    self.network.next_training_epoch = int(last_epoch_f.read())
+                with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_pretrain_opt", "rb") as opt_f:
+                    opt_w = opt_f.read()
+                    opt_w = pickle.loads(opt_w)
 
-                tf.print(f"Model with cache key {self.cache_key} (idx {self.cache_idx}) has been found and loaded, along with its optimizer and the last training epoch.")
+                ws = self.network.encoder.trainable_weights
+                noop = [tf.zeros_like(w) for w in ws]
+                self.network.encoder.optimizer.apply_gradients(zip(noop, ws))
+                self.network.encoder.optimizer.set_weights(opt_w)
+
+                with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_status.json", "r") as status_f:
+                    status = json.load(status_f)
+
+                self.network.next_train_epoch = status["next_epoch"]
+                self.network.next_pretrain_epoch = status["next_pretrain_epoch"]
+                self.network._status = status["state"]
+
+                tf.print(f"Model with cache key {self.cache_key} (idx {self.cache_idx}) has been found and loaded.")
                 
             except FileNotFoundError:
                 pass
 
-    def store_model(self, last_epoch):
+    def store_model(self):
         '''
             method for saving a model, along with its optimizer
             the model is saved automatically (if cache is used):
@@ -635,18 +806,33 @@ class NetworkCacheManager:
             * in train, if it is stopped with Ctrl-C
         '''
 
+        if self.network._status < Network.TRAINING_ENCODER:
+            tf.print("Network is not trained. Nothing to save.")
+            return
+
         if self.cache_idx is not None:
-        
-            self.network.next_training_epoch = last_epoch
-            with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_next_epoch", "w+") as last_epoch_f:
-                last_epoch_f.write(f"{self.network.next_training_epoch}")
+
+            status =    {
+                        "next_epoch": self.network.next_train_epoch,
+                        "next_pretrain_epoch": self.network.next_pretrain_epoch,
+                        "state": self.network._status
+                        }
+
+            with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_status.json", "w+") as status_f:
+                json.dump(status, status_f)
     
             opt_w = tf.keras.backend.batch_get_value(self.network.full_network.optimizer.weights)
             with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_opt", "wb+") as opt_f:
                 opt_w = pickle.dumps(opt_w)
                 opt_f.write(opt_w)
 
+            opt_w = tf.keras.backend.batch_get_value(self.network.encoder.optimizer.weights)
+            with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_pretrain_opt", "wb+") as opt_f:
+                opt_w = pickle.dumps(opt_w)
+                opt_f.write(opt_w)
+
             tf.keras.models.save_model(self.network.full_network, f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_model", overwrite=True)
+            tf.keras.models.save_model(self.network.full_network, f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_pretrain_model", overwrite=True)
 
             tf.print(f"Model with key {self.cache_key} (idx {self.cache_idx}) has been saved.")
 
@@ -675,6 +861,31 @@ class NetworkCacheManager:
         except FileNotFoundError:
             return [[] for _ in range(12)]
 
+    def get_pretrain_stat(self):
+        '''
+            loads the train statistics under the cache_key, cache_idx entry
+        '''
+
+        if self.cache_key is not None:
+            cache_key = self.cache_key
+            cache_idx = self.cache_idx
+
+        else:
+            cache_key = TMP_CACHE_KEY
+            cache_idx = TMP_CACHE_KEY
+
+        try:
+            
+            with open(f"{TRAIN_STATS_PATH}{cache_key}_{cache_idx}_pretrain_stats", "rb") as stats_f:
+                
+                stats = stats_f.read()
+                stats = pickle.loads(stats)
+
+            return stats
+
+        except FileNotFoundError:
+            return [[] for _ in range(4)]
+
     def store_stats(self, stats):
         '''
             saves the train statistics under the cache_key, cache_idx entry
@@ -693,6 +904,24 @@ class NetworkCacheManager:
             stats = pickle.dumps(stats)
             stats_f.write(stats)
 
+    def store_pretrain_stats(self, stats):
+        '''
+            saves the pre-train statistics under the cache_key, cache_idx entry
+        '''
+
+        if self.cache_key is not None:
+            cache_key = self.cache_key
+            cache_idx = self.cache_idx
+
+        else:
+            cache_key = TMP_CACHE_KEY
+            cache_idx = TMP_CACHE_KEY
+
+        with open(f"{TRAIN_STATS_PATH}{cache_key}_{cache_idx}_pretrain_stats", "wb+") as stats_f:
+            
+            stats = pickle.dumps(stats)
+            stats_f.write(stats)
+
     def store_stats_fig(self):
 
         if self.cache_key is not None:
@@ -704,3 +933,15 @@ class NetworkCacheManager:
             cache_idx = TMP_CACHE_KEY
 
         plt.savefig(f"{TRAIN_STATS_PATH}{cache_key}_{cache_idx}_stats_plot")
+
+    def store_pretrain_stats_fig(self):
+
+        if self.cache_key is not None:
+            cache_key = self.cache_key
+            cache_idx = self.cache_idx
+
+        else:
+            cache_key = TMP_CACHE_KEY
+            cache_idx = TMP_CACHE_KEY
+
+        plt.savefig(f"{TRAIN_STATS_PATH}{cache_key}_{cache_idx}_pretrain_stats_plot")

@@ -52,6 +52,17 @@ DATA_LOAD_BATCH_SIZE = 128
     batch size just for loading
 '''
 
+PRETRAIN_DATA_LOAD_BATCH_SIZE = 128
+'''
+    batch size just for loading (pretrain data)
+'''
+
+PRETRAIN_GT_LOAD_BATCH_SIZE = PRETRAIN_DATA_LOAD_BATCH_SIZE
+'''
+    batch size just for loading ground truth (bool masks, target masks)
+'''
+assert(PRETRAIN_GT_LOAD_BATCH_SIZE == PRETRAIN_DATA_LOAD_BATCH_SIZE)
+
 GT_LOAD_BATCH_SIZE = 1024
 '''
     batch size just for loading ground truth (bool masks, target masks)
@@ -67,6 +78,18 @@ PERMANENT_DATA_BATCHES = 10000
 PERMANENT_DATA_ENTRIES = PERMANENT_DATA_BATCHES * DATA_LOAD_BATCH_SIZE
 '''
     how many data entries to permanently store in memory (and be loaded only once)
+'''
+
+PERMANENT_PRETRAIN_DATA_BATCHES = 10000
+'''
+    how many bounding box batches to permanently store in memory (and be loaded only once)
+    * FOR PRETRAIN PHASE ONLY
+'''
+
+PERMANENT_PRETRAIN_DATA_ENTRIES = PERMANENT_PRETRAIN_DATA_BATCHES * PRETRAIN_DATA_LOAD_BATCH_SIZE
+'''
+    how many bounding box entries to permanently store in memory (and be loaded only once)
+    * FOR PRETRAIN PHASE ONLY
 '''
 
 PERMANENT_GT_BATCHES = 1000
@@ -102,10 +125,9 @@ MIN_BBOX_DIM = 3
     to filter ground truth
 '''
 
-CLASSIFICATION_SIZE = (256, 256)
+PRETRAIN_BOX_SIZE = (256, 256)
 '''
-    (UNUSED)
-    classification pre-training of backbone
+    size for input in classification pre-training of backbone
 '''
 
 GRID_CELL_CNT = [13, 26, 52]

@@ -14,9 +14,7 @@ def main():
     def _test_mask_encoding():
 
         data_loader = DataLoader(cache_key="all")
-        data_loader.load_info()
-        data_loader.determine_anchors()
-        data_loader.assign_anchors_to_objects()
+        data_loader.prepare()
 
         # hack to get img ids
         def _get_imgid():
@@ -60,7 +58,7 @@ def main():
                     cnt_ += 1
 
                     img = cv.imread(data_loader.imgs["validation"][img_id]["filename"])
-                    img = tf.convert_to_tensor(data_loader.cache_manager.resize_with_pad(img))
+                    img = tf.convert_to_tensor(data_loader.cache_manager.resize_with_pad(img, IMG_SIZE))
 
                     output_perimg = [make_prediction_perscale(output_from_mask[d][cnt_ - 1: cnt_], anchors_relative[d], 0.6) for d in range(SCALE_CNT)]
                     show_prediction(img, [output_perimg[d][0] for d in range(SCALE_CNT)],
@@ -76,9 +74,7 @@ def main():
         FEW = 2
 
         data_loader = DataLoader(cache_key="base")
-        data_loader.load_info()
-        data_loader.determine_anchors()
-        data_loader.assign_anchors_to_objects()
+        data_loader.prepare()
 
         def _lr_sched(epoch, lr):
 
@@ -129,9 +125,7 @@ def main():
     def _run_training():
 
         data_loader = DataLoader(cache_key="all")
-        data_loader.load_info()
-        data_loader.determine_anchors()
-        data_loader.assign_anchors_to_objects()
+        data_loader.prepare()
 
         LR_CH1 = 60
         LR_CH2 = 90
@@ -157,7 +151,7 @@ def main():
     #_test_mask_encoding()
     #_test_learning_few_img()
     #_run_training()
-    _show_stats()
+    #_show_stats()
     
 if __name__ == "__main__":
     main()

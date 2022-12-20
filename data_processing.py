@@ -80,6 +80,11 @@ class DataLoader:
                                     }
         '''
 
+        self._box_cnt = {"train": 0, "validation": 0}
+        '''
+            how many boxes for train / validation (used only for pre-training)
+        '''
+
         self.validation_ratio = validation_ratio
         '''
             (approximate) ratio of |{val imgs}| / |{all imgs}|
@@ -97,6 +102,16 @@ class DataLoader:
             the cache manager
         '''
 
+    def prepare(self):
+        '''
+            Prepare everything for detection training/validation/testing, 
+            and also for encoder pretraining
+        '''
+
+        self.load_info()
+        self.determine_anchors()
+        self.assign_anchors_to_objects()
+
     def get_img_cnt(self, purpose):
 
         if purpose == "train":
@@ -104,6 +119,9 @@ class DataLoader:
 
         elif purpose == "validation":
             return len(self.imgs["validation"])
+
+    def get_box_cnt(self, purpose):
+        return self._box_cnt[purpose]
 
     def get_class_cnt(self):
         return len(self.category_onehot_to_id)
@@ -114,10 +132,6 @@ class DataLoader:
             loads image in batches
             purpose: "train" | "validation"
         '''
-        
-        if self.used_categories == {}:
-            tf.print("info not yet loaded")
-            quit()
 
         current_loaded = []
         for img_id in self.imgs[purpose].keys():
@@ -259,6 +273,88 @@ class DataLoader:
                         obj_mask_size2[lo:], ignored_mask_size2[lo:], target_mask_size2[lo:], \
                         obj_mask_size3[lo:], ignored_mask_size3[lo:], target_mask_size3[lo:]
 
+    def load_boxes(self, purpose):
+        
+        current_loaded = []
+        for img_id, objs in self.imgs[purpose].items():
+            for bbox_d in objs:
+
+                current_loaded.append(self.cache_manager.get_box(img_id, bbox_d["bbox"], purpose))
+
+                if len(current_loaded) == DATA_LOAD_BATCH_SIZE:
+
+                    current_loaded = tf.convert_to_tensor(current_loaded)
+                    yield current_loaded
+
+                    current_loaded = []
+
+        if len(current_loaded) > 0:
+
+            current_loaded = tf.convert_to_tensor(current_loaded)
+            yield current_loaded
+
+    def load_box_gt(self, purpose):
+
+        CLASS_CNT = self.get_class_cnt()
+        
+        current_loaded = []
+        for _, objs in self.imgs[purpose].items():
+            for bbox_d in objs:
+
+                current_loaded.append(tf.one_hot(bbox_d["category"], CLASS_CNT))
+
+                if len(current_loaded) == PRETRAIN_GT_LOAD_BATCH_SIZE:
+
+                    current_loaded = tf.convert_to_tensor(current_loaded)
+                    yield current_loaded
+
+                    current_loaded = []
+
+        if len(current_loaded) > 0:
+
+            current_loaded = tf.convert_to_tensor(current_loaded)
+            yield current_loaded
+
+    def load_pretrain_data(self, batch_size, purpose):
+        
+        if PRETRAIN_DATA_LOAD_BATCH_SIZE < batch_size:
+            tf.print("(Pretrain) Data load batch size must be >= with the train batch size")
+            quit()
+
+        if PRETRAIN_DATA_LOAD_BATCH_SIZE % batch_size != 0:
+            tf.print("(Pretrain) Data load batch size must be divisible with the train batch size")
+            quit()
+
+        load_2_b = PRETRAIN_DATA_LOAD_BATCH_SIZE // batch_size
+
+        gt_generator = self.load_box_gt(purpose)
+        for boxes in self.load_boxes(purpose):
+
+            classif_gt = next(gt_generator)
+
+            if boxes.shape[0] == PRETRAIN_DATA_LOAD_BATCH_SIZE:
+
+                idx = 0
+                for idx in range(load_2_b):
+                    lo = idx * batch_size
+                    hi = (idx + 1) * batch_size
+
+                    yield (tf.cast(boxes[lo: hi], tf.float32) / 255.0) * 2.0 - 1.0, classif_gt[lo: hi]
+            
+            else:
+
+                limit = boxes.shape[0] // batch_size
+
+                idx = 0
+                for idx in range(limit):
+                    lo = idx * batch_size
+                    hi = (idx + 1) * batch_size
+
+                    yield (tf.cast(boxes[lo: hi], tf.float32) / 255.0) * 2.0 - 1.0, classif_gt[lo: hi]
+
+                lo = limit * batch_size
+                yield (tf.cast(boxes[lo:], tf.float32) / 255.0) * 2.0 - 1.0, classif_gt[lo:]
+
     def load_info(self):
         '''
             load everything at once
@@ -374,6 +470,8 @@ class DataLoader:
 
                 self.imgs[purpose][img_info["id"]]["objs"] = bbox_d_ok
 
+                self._box_cnt[purpose] += len(bbox_d_ok)
+
         if self.validation_ratio:
 
             t_img_cnt = self.get_img_cnt('train')
@@ -406,9 +504,13 @@ class DataLoader:
                         break
 
                 for img_id in reloc_ids:
+
                     self.imgs[p_to][img_id] = self.imgs[p_from].pop(img_id)
 
-        tf.print(f"Loaded {self.get_img_cnt('train')} train images and {self.get_img_cnt('validation')} validation images.")
+                    self._box_cnt[p_to] += len(self.imgs[p_to][img_id]["objs"])
+                    self._box_cnt[p_from] -= len(self.imgs[p_to][img_id]["objs"])
+
+        tf.print(f"Loaded {self.get_img_cnt('train')} train images ({self._box_cnt['train']} train boxes) and {self.get_img_cnt('validation')} validation images ({self._box_cnt['validation']} validation boxes).")
 
     def determine_anchors(self):
 
@@ -612,6 +714,11 @@ class DataCacheManager:
         '''
             self._permanent_gt[purpose][gt batch idx] = gt batch ready2use w/o loading
         '''
+
+        self._permanent_pretrain_data = {"train": {}, "validation": {}}
+        '''
+            self._permanent_pretrain_data[purpose][(img_id, coords)] = box ready2use w/o loading
+        '''
     
     def get_anchors(self):
 
@@ -638,7 +745,7 @@ class DataCacheManager:
             with open(f"{DATA_CACHE_PATH}{self.cache_key}_anchors.bin", "wb+") as cache_f:
                 cache_f.write(new_cache)
 
-    def resize_with_pad(self, img):
+    def resize_with_pad(self, img, final_size):
         '''
             returns resized image with black symmetrical padding
         '''
@@ -665,7 +772,7 @@ class DataCacheManager:
 
             img = np.concatenate([padl, img, padr], 1)
 
-        return cv.resize(img, IMG_SIZE)
+        return cv.resize(img, final_size)
 
     def get_img(self, img_id, purpose):
 
@@ -679,7 +786,7 @@ class DataCacheManager:
         else:
 
             img = cv.imread(self.loader.imgs[purpose][img_id]["filename"])
-            img = self.resize_with_pad(img)
+            img = self.resize_with_pad(img, IMG_SIZE)
 
             if len(self._permanent_data["train"]) + len(self._permanent_data["validation"]) < PERMANENT_DATA_ENTRIES:
 
@@ -690,6 +797,25 @@ class DataCacheManager:
                     self._permanent_data[purpose][img_id] = tf.convert_to_tensor(img)
 
             return tf.convert_to_tensor(img)
+
+    def get_box(self, img_id, coords, purpose):
+        
+        entry_key = (img_id, coords)
+
+        if entry_key in self._permanent_pretrain_data[purpose].keys():
+            return self._permanent_pretrain_data[purpose][entry_key]
+
+        else:
+
+            img = np.array(self.get_img(img_id, purpose))
+
+            box = img[coords[0]: coords[0] + coords[2]][coords[1]: coords[1] + coords[3]]
+            box = tf.convert_to_tensor(self.resize_with_pad(box, PRETRAIN_BOX_SIZE))
+
+            if len(self._permanent_pretrain_data["train"]) + len(self._permanent_pretrain_data["validation"]) < PERMANENT_PRETRAIN_DATA_ENTRIES:
+                self._permanent_pretrain_data[purpose][entry_key] = box
+
+            return box
 
     def get_gt_batch(self, gt_batch_idx, purpose):
 
@@ -745,6 +871,8 @@ class DataCacheManager:
                     GT_BATCH_CNT = IMG_CNT // GT_LOAD_BATCH_SIZE
                     if IMG_CNT % GT_LOAD_BATCH_SIZE > 0:
                         GT_BATCH_CNT += 1
+
+                    print(f"GT batch count: {GT_BATCH_CNT}")
 
                     for gt_batch_idx in range(GT_BATCH_CNT):
 
