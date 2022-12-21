@@ -163,7 +163,7 @@ def main():
 
         model = Network(data_loader, cache_idx="testclasif")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), lr_scheduler=lr_sched, 
-                                pretrain_optimizer=tf.keras.optimizers.SGD(1e-3, momentum=0.9), lr_scheduler=lr_sched)
+                                pretrain_optimizer=tf.keras.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=lr_sched)
         model.pretrain_encoder(10, 32, progbar=True)
         #model.train(160, 64, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False)
 
