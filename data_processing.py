@@ -298,8 +298,8 @@ class DataLoader:
         CLASS_CNT = self.get_class_cnt()
         
         current_loaded = []
-        for _, objs in self.imgs[purpose].items():
-            for bbox_d in objs:
+        for _, img_d in self.imgs[purpose].items():
+            for bbox_d in img_d["objs"]:
 
                 current_loaded.append(tf.one_hot(bbox_d["category"], CLASS_CNT))
 
@@ -687,6 +687,36 @@ class DataLoader:
 
             if len(obj_anchor_masks[0]) > 0:
                 self.cache_manager.store_gt(obj_anchor_masks, ignored_anchor_masks, target_anchor_masks, purpose, gt_batch_idx)
+
+    def test_for_nan_inf(self):
+
+        for purpose in ["train", "validation"]:
+            for (_, obj_mask_size1, ignored_mask_size1, target_mask_size1, \
+                    obj_mask_size2, ignored_mask_size2, target_mask_size2, \
+                    obj_mask_size3, ignored_mask_size3, target_mask_size3) in self.load_data(128, purpose):  
+
+                assert(tf.reduce_sum(tf.cast(tf.math.is_nan(obj_mask_size1), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_nan(obj_mask_size2), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_nan(obj_mask_size3), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_inf(obj_mask_size1), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_inf(obj_mask_size2), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_inf(obj_mask_size3), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_nan(ignored_mask_size1), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_nan(ignored_mask_size2), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_nan(ignored_mask_size3), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_inf(ignored_mask_size1), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_inf(ignored_mask_size2), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_inf(ignored_mask_size3), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_nan(target_mask_size1), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_nan(target_mask_size2), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_nan(target_mask_size3), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_inf(target_mask_size1), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_inf(target_mask_size2), tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(tf.math.is_inf(target_mask_size3), tf.int32)) == 0)
+
+                assert(tf.reduce_sum(tf.cast(obj_mask_size1 * ignored_mask_size1, tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(obj_mask_size2 * ignored_mask_size2, tf.int32)) == 0)
+                assert(tf.reduce_sum(tf.cast(obj_mask_size3 * ignored_mask_size3, tf.int32)) == 0)
 
 class DataCacheManager:
 
