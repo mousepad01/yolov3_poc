@@ -276,8 +276,8 @@ class DataLoader:
     def load_boxes(self, purpose):
         
         current_loaded = []
-        for img_id, objs in self.imgs[purpose].items():
-            for bbox_d in objs:
+        for img_id, img_d in self.imgs[purpose].items():
+            for bbox_d in img_d["objs"]:
 
                 current_loaded.append(self.cache_manager.get_box(img_id, bbox_d["bbox"], purpose))
 
@@ -734,7 +734,7 @@ class DataCacheManager:
                 tf.print("Cache found. Anchors loaded.")
 
             except FileNotFoundError:
-                tf.print("Cache not found. Operations will be fully executed and a new cache will be created.")
+                tf.print("Anchor cache not found. Operations will be fully executed and a new cache will be created.")
     
     def store_anchors(self):
 
@@ -889,7 +889,7 @@ class DataCacheManager:
                 return True
 
             except FileNotFoundError:
-                tf.print("Cache not found. Operations will be fully executed and a new cache will be created")
+                tf.print("Ground truth cache not found. Operations will be fully executed and a new cache will be created")
                 return False
         
         return False

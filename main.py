@@ -132,16 +132,17 @@ def main():
         LR_CH2 = 90
         LR_CH3 = 1000
 
-        lrs = {e: 1e-3 for e in range(LR_CH1)}
-        lrs.update({e: 1e-4 for e in range(LR_CH1, LR_CH2)})
-        lrs.update({e: 1e-5 for e in range(LR_CH2, LR_CH3)})
+        lrs = {e: 1e-4 for e in range(LR_CH1)}
+        lrs.update({e: 1e-5 for e in range(LR_CH1, LR_CH2)})
+        lrs.update({e: 1e-6 for e in range(LR_CH2, LR_CH3)})
 
         lr_sched = Lr_absolute_sched(lrs)
         ch_sched = Minloss_checkpoint([x for x in range(10, 160, 10)])
 
-        model = Network(data_loader, cache_idx="afull_detonly")
+        model = Network(data_loader, cache_idx="afull_test5")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), lr_scheduler=lr_sched, 
-                                pretrain_optimizer=tf.keras.optimizers.SGD(1e-3, 0.9))
+                                pretrain_optimizer=tf.keras.optimizers.SGD(1e-3, 0.9), pretrain_lr_scheduler=lr_sched)
+        #model.pretrain_encoder(10, 32, progbar=True)
         model.train(160, 64, progbar=True, checkpoint_sched=ch_sched, copy_at_checkpoint=False)
 
     def _run_training():
@@ -174,7 +175,8 @@ def main():
         model.plot_stats(show_on_screen=True, save_image=False)
 
     #_test_mask_encoding()
-    _test_learning_few_img()
+    #_test_learning_few_img()
+    _run_training_detonly()
     #_run_training()
     #_show_stats()
     

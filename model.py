@@ -276,7 +276,7 @@ class Network:
         if VALIDATION_IMG_CNT % VALIDATION_BATCH_SIZE > 0:
             VALIDATION_BATCH_CNT += 1
 
-        train_loss_stats, validation_loss_stats, train_accuracy_stats, validation_accuracy_stats = self.cache_manager.get_stats()
+        train_loss_stats, validation_loss_stats, train_accuracy_stats, validation_accuracy_stats = self.cache_manager.get_pretrain_stat()
 
         def _to_output_t(x): 
             return floor((x / TRAIN_IMG_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)
@@ -498,7 +498,7 @@ class Network:
                             obj_mask_size3, ignored_mask_size3, target_mask_size3) in self.data_loader.load_data(TRAIN_BATCH_SIZE, "train"):
 
                     with tf.GradientTape() as tape:
-                    
+
                         out_s1, out_s2, out_s3 = self.full_network(imgs, training=True)
 
                         loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_s1, obj_mask_size1, ignored_mask_size1, target_mask_size1)
@@ -526,9 +526,9 @@ class Network:
                     sum_loss_xy += xy
                     sum_loss_wh += wh
 
-                    break
+                    #break
 
-                continue
+                #continue
 
                 # validation loop
 
