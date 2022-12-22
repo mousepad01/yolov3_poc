@@ -833,19 +833,28 @@ class DataCacheManager:
         entry_key = (img_id, coords)
 
         if entry_key in self._permanent_pretrain_data[purpose].keys():
-            return self._permanent_pretrain_data[purpose][entry_key]
+
+            if COMPRESS_DATA_CACHE:
+                return tf.convert_to_tensor(cv.imdecode(self._permanent_pretrain_data[purpose][entry_key], cv.IMREAD_UNCHANGED))
+            else:
+                return self._permanent_pretrain_data[purpose][entry_key]
 
         else:
 
             img = np.array(self.get_img(img_id, purpose))
 
-            box = img[coords[0]: coords[0] + coords[2]][coords[1]: coords[1] + coords[3]]
-            box = tf.convert_to_tensor(self.resize_with_pad(box, PRETRAIN_BOX_SIZE))
+            box = img[coords[0]: coords[0] + coords[2], coords[1]: coords[1] + coords[3], :]
+            box = self.resize_with_pad(box, PRETRAIN_BOX_SIZE)
 
             if len(self._permanent_pretrain_data["train"]) + len(self._permanent_pretrain_data["validation"]) < PERMANENT_PRETRAIN_DATA_ENTRIES:
-                self._permanent_pretrain_data[purpose][entry_key] = box
+                
+                if COMPRESS_DATA_CACHE:
+                    _, encoded_box = cv.imencode(".jpg", box)
+                    self._permanent_pretrain_data[purpose][entry_key] = encoded_box
+                else:
+                    self._permanent_pretrain_data[purpose][entry_key] = tf.convert_to_tensor(box)
 
-            return box
+            return tf.convert_to_tensor(box)
 
     def get_gt_batch(self, gt_batch_idx, purpose):
 
@@ -901,8 +910,6 @@ class DataCacheManager:
                     GT_BATCH_CNT = IMG_CNT // GT_LOAD_BATCH_SIZE
                     if IMG_CNT % GT_LOAD_BATCH_SIZE > 0:
                         GT_BATCH_CNT += 1
-
-                    print(f"GT batch count: {GT_BATCH_CNT}")
 
                     for gt_batch_idx in range(GT_BATCH_CNT):
 

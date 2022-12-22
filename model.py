@@ -393,7 +393,7 @@ class Network:
             stats = [train_loss_stats, validation_loss_stats, train_accuracy_stats, validation_accuracy_stats]
             self.cache_manager.store_pretrain_stats(stats)
 
-    def train(self, epochs, batch_size, progbar=True, checkpoint_sched=lambda epoch, loss, vloss: False, copy_at_checkpoint=True):
+    def train(self, epochs, batch_size, progbar=True, checkpoint_sched=lambda epoch, loss, vloss: False, copy_at_checkpoint=True, burnin=True):
         '''
             * epochs: number of total epochs (effective number of epochs executed: epochs - self.next_train_epoch + 1)
             * batch_size: for training
@@ -496,6 +496,11 @@ class Network:
                 for (imgs, obj_mask_size1, ignored_mask_size1, target_mask_size1, \
                             obj_mask_size2, ignored_mask_size2, target_mask_size2, \
                             obj_mask_size3, ignored_mask_size3, target_mask_size3) in self.data_loader.load_data(TRAIN_BATCH_SIZE, "train"):
+
+                    if burnin and epoch == 0 and batch_idx <= 1000:
+                        
+                        new_lr = 1e-3 * (batch_idx / 1000) ** 4
+                        self.full_network.optimizer.learning_rate = new_lr
 
                     with tf.GradientTape() as tape:
 
@@ -739,6 +744,17 @@ class NetworkCacheManager:
 
         tf.print(f"Model copied from idx {self.cache_idx} to idx {new_cache_idx}.")
 
+    def _init_optimizer(self, net):
+        '''
+            hack to initialize weights for the optimizer of a network, 
+            in case they are not already initialized
+            https://github.com/keras-team/keras/issues/15298
+        '''
+
+        ws = net.trainable_weights
+        noop = [tf.zeros_like(w) for w in ws]
+        net.optimizer.apply_gradients(zip(noop, ws))
+
     def get_model(self):
         '''
             method for loading:
@@ -776,20 +792,14 @@ class NetworkCacheManager:
                     opt_w = opt_f.read()
                     opt_w = pickle.loads(opt_w)
 
-                # hack to initialize weights for the optimizer, so that old ones can be loaded 
-                # https://github.com/keras-team/keras/issues/15298
-                ws = self.network.full_network.trainable_weights
-                noop = [tf.zeros_like(w) for w in ws]
-                self.network.full_network.optimizer.apply_gradients(zip(noop, ws))
+                self._init_optimizer(self.network.full_network)
                 self.network.full_network.optimizer.set_weights(opt_w)
 
                 with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_pretrain_opt", "rb") as opt_f:
                     opt_w = opt_f.read()
                     opt_w = pickle.loads(opt_w)
 
-                ws = self.network.encoder.trainable_weights
-                noop = [tf.zeros_like(w) for w in ws]
-                self.network.encoder.optimizer.apply_gradients(zip(noop, ws))
+                self._init_optimizer(self.network.encoder)
                 self.network.encoder.optimizer.set_weights(opt_w)
 
                 tf.print(f"Model with cache key {self.cache_key} (idx {self.cache_idx}) has been found and loaded.")
@@ -821,18 +831,20 @@ class NetworkCacheManager:
             with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_status.json", "w+") as status_f:
                 json.dump(status, status_f)
     
+            self._init_optimizer(self.network.full_network)
             opt_w = tf.keras.backend.batch_get_value(self.network.full_network.optimizer.weights)
             with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_opt", "wb+") as opt_f:
                 opt_w = pickle.dumps(opt_w)
                 opt_f.write(opt_w)
 
+            self._init_optimizer(self.network.encoder)
             opt_w = tf.keras.backend.batch_get_value(self.network.encoder.optimizer.weights)
             with open(f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_pretrain_opt", "wb+") as opt_f:
                 opt_w = pickle.dumps(opt_w)
                 opt_f.write(opt_w)
 
             tf.keras.models.save_model(self.network.full_network, f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_model", overwrite=True)
-            tf.keras.models.save_model(self.network.full_network, f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_pretrain_model", overwrite=True)
+            tf.keras.models.save_model(self.network.encoder, f"{MODEL_CACHE_PATH}{self.cache_key}_{self.cache_idx}_pretrain_model", overwrite=True)
 
             tf.print(f"Model with key {self.cache_key} (idx {self.cache_idx}) has been saved.")
 

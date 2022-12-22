@@ -18,7 +18,7 @@ def main():
 
         # hack to get img ids
         def _get_imgid():
-            for imgid in data_loader.imgs["validation"].keys():
+            for imgid in data_loader.imgs["train"].keys():
                 yield imgid
 
         CLS_CNT = data_loader.get_class_cnt()
@@ -28,7 +28,7 @@ def main():
             img_keys = _get_imgid()
             for (imgs, obj_mask_size1, ignored_mask_size1, target_mask_size1, \
                         obj_mask_size2, ignored_mask_size2, target_mask_size2, \
-                        obj_mask_size3, ignored_mask_size3, target_mask_size3) in data_loader.load_data(4, "validation"):
+                        obj_mask_size3, ignored_mask_size3, target_mask_size3) in data_loader.load_data(32, "train"):
 
                 img_keys_ = []
                 for _ in range(imgs.shape[0]):
@@ -53,12 +53,14 @@ def main():
 
                 cnt_ = 0
                 for img_id in img_keys_:
+
+                    img = tf.cast(tf.floor(((imgs[cnt_] + 1.0) / 2.0) * 255.0), tf.uint8)
                     
                     print(img_id)
                     cnt_ += 1
 
-                    img = cv.imread(data_loader.imgs["validation"][img_id]["filename"])
-                    img = tf.convert_to_tensor(data_loader.cache_manager.resize_with_pad(img, IMG_SIZE))
+                    #img = cv.imread(data_loader.imgs["train"][img_id]["filename"])
+                    #img = tf.convert_to_tensor(data_loader.cache_manager.resize_with_pad(img, IMG_SIZE))
 
                     output_perimg = [make_prediction_perscale(output_from_mask[d][cnt_ - 1: cnt_], anchors_relative[d], 0.6) for d in range(SCALE_CNT)]
                     show_prediction(img, [output_perimg[d][0] for d in range(SCALE_CNT)],
@@ -67,7 +69,25 @@ def main():
                                             [output_perimg[d][3] for d in range(SCALE_CNT)],
                                             
                                     data_loader.onehot_to_name,
-                                    data_loader.imgs["validation"][img_id]["objs"])
+                                    data_loader.imgs["train"][img_id]["objs"])
+
+    def _test_boxes():
+
+        data_loader = DataLoader(cache_key="all")
+        data_loader.prepare()
+
+        BSIZE = 32
+
+        for (imgs, gt) in data_loader.load_pretrain_data(BSIZE, "train"):
+
+            tf.print("new batch")
+
+            for idx in range(imgs.shape[0]):
+
+                img = np.array(tf.cast(tf.floor(((imgs[idx] + 1.0) / 2.0) * 255.0), tf.uint8))
+                #img = np.array(imgs[idx])
+                cv.imshow(data_loader.onehot_to_name[int(tf.argmax(gt[idx]))], img)
+                cv.waitKey(0)
 
     def _test_learning_few_img():
 
@@ -130,17 +150,17 @@ def main():
 
         LR_CH1 = 60
         LR_CH2 = 90
-        LR_CH3 = 1000
+        LR_CH3 = 200
 
-        lrs = {e: 1e-4 for e in range(LR_CH1)}
-        lrs.update({e: 1e-5 for e in range(LR_CH1, LR_CH2)})
-        lrs.update({e: 1e-6 for e in range(LR_CH2, LR_CH3)})
+        lrs = {e: 1e-3 for e in range(LR_CH1)}
+        lrs.update({e: 1e-4 for e in range(LR_CH1, LR_CH2)})
+        lrs.update({e: 1e-5 for e in range(LR_CH2, LR_CH3)})
 
         lr_sched = Lr_absolute_sched(lrs)
         ch_sched = Minloss_checkpoint([x for x in range(10, 160, 10)])
 
-        model = Network(data_loader, cache_idx="afull_test5")
-        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), lr_scheduler=lr_sched, 
+        model = Network(data_loader, cache_idx="sgd_burnin0")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, 0.9), lr_scheduler=lr_sched, 
                                 pretrain_optimizer=tf.keras.optimizers.SGD(1e-3, 0.9), pretrain_lr_scheduler=lr_sched)
         #model.pretrain_encoder(10, 32, progbar=True)
         model.train(160, 64, progbar=True, checkpoint_sched=ch_sched, copy_at_checkpoint=False)
@@ -174,11 +194,12 @@ def main():
         model.plot_pretrain_stats(show_on_screen=True, save_image=False)
         model.plot_stats(show_on_screen=True, save_image=False)
 
-    #_test_mask_encoding()
+    _test_mask_encoding()
+    #_test_boxes()
     #_test_for_nan_inf()
     #_test_learning_few_img()
     #_run_training_detonly()
-    _run_training()
+    #_run_training()
     #_show_stats()
     
 if __name__ == "__main__":
