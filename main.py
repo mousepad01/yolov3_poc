@@ -6,7 +6,8 @@ import random
 from data_processing import *
 from anchor_kmeans import *
 from model import *
-from custom import *
+from checkpoint_scheds import *
+from lr_scheds import *
 
 print("NOTE: this implementation relies on the fact that dictionaries are ORDERED. yielding keys in a nedeterministic order breaks everything")
 
@@ -59,9 +60,6 @@ def main():
                     
                     print(img_id)
                     cnt_ += 1
-
-                    #img = cv.imread(data_loader.imgs["train"][img_id]["filename"])
-                    #img = tf.convert_to_tensor(data_loader.cache_manager.resize_with_pad(img, IMG_SIZE))
 
                     output_perimg = [make_prediction_perscale(output_from_mask[d][cnt_ - 1: cnt_], anchors_relative[d], 0.6) for d in range(SCALE_CNT)]
                     show_prediction(img, [output_perimg[d][0] for d in range(SCALE_CNT)],
@@ -173,7 +171,7 @@ def main():
         lrs.update({e: 1e-4 for e in range(LR_CH1, LR_CH2)})
         lrs.update({e: 1e-5 for e in range(LR_CH2, LR_CH3)})
 
-        lr_sched = Lr_absolute_sched(lrs)
+        lr_sched = Lr_dict_sched(lrs)
         ch_sched = Minloss_checkpoint([x for x in range(10, 160, 10)])
 
         model = Network(data_loader, cache_idx="test00000")
@@ -218,7 +216,7 @@ def main():
         lrs.update({e: 1e-4 for e in range(LR_CH1, LR_CH2)})
         lrs.update({e: 1e-5 for e in range(LR_CH2, LR_CH3)})
 
-        lr_sched = Lr_absolute_sched(lrs)
+        lr_sched = Lr_dict_sched(lrs)
         ch_sched = Minloss_checkpoint([x for x in range(10, 160, 10)])
 
         model = Network(data_loader, cache_idx="sgd_burnin0")
@@ -232,22 +230,21 @@ def main():
         data_loader = DataLoader(cache_key="all")
         data_loader.prepare()
 
-        LR_CH1 = 60
-        LR_CH2 = 90
-        LR_CH3 = 1000
+        EPOCHS = 160
+        P_EPOCHS = 10
 
-        lrs = {e: 1e-3 for e in range(LR_CH1)}
-        lrs.update({e: 1e-4 for e in range(LR_CH1, LR_CH2)})
-        lrs.update({e: 1e-5 for e in range(LR_CH2, LR_CH3)})
+        lr_sched = Lr_cosine_decay(1e-5, 1e-4, EPOCHS)
 
-        lr_sched = Lr_absolute_sched(lrs)
-        ch_sched = Minloss_checkpoint([x for x in range(10, 160, 10)])
+        p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
+        p_lr_sched = Lr_dict_sched(p_lrs)
 
-        model = Network(data_loader, cache_idx="test0")
-        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), lr_scheduler=lr_sched, 
-                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=lr_sched)
-        model.pretrain_encoder(2, 32, progbar=True)
-        model.train(160, 32, progbar=True, checkpoint_sched=ch_sched, copy_at_checkpoint=False)
+        ch_sched = Minloss_checkpoint([x for x in range(10, 160, 5)])
+
+        model = Network(data_loader, cache_idx="test_sgd_1e-4_cosdecay")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-4, momentum=0.9), lr_scheduler=lr_sched, 
+                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=p_lr_sched)
+        model.pretrain_encoder(1, 32, progbar=False, copy_at_checkpoint=False)
+        model.train(160, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=True, save_on_keyboard_interrupt=False)
 
     def _run_training2():
 
@@ -255,41 +252,21 @@ def main():
         data_loader.prepare()
 
         EPOCHS = 160
+        P_EPOCHS = 10
 
         lrs = {e: 5e-5 for e in range(EPOCHS)}
+        lr_sched = Lr_dict_sched(lrs)
 
-        lr_sched = Lr_absolute_sched(lrs)
+        p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
+        p_lr_sched = Lr_dict_sched(p_lrs)
+
         ch_sched = Minloss_checkpoint([x for x in range(10, 160, 5)])
 
         model = Network(data_loader, cache_idx="test_adam_5e-5")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), lr_scheduler=lr_sched, 
-                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=lr_sched)
+                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=p_lr_sched)
         model.pretrain_encoder(1, 32, progbar=False, copy_at_checkpoint=False)
         model.train(160, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=True, save_on_keyboard_interrupt=False)
-
-    # TODO
-    def _gridsearch():
-
-        data_loader = DataLoader(cache_key="all")
-        data_loader.prepare()
-
-        LR_CH1 = 60
-        LR_CH2 = 90
-        LR_CH3 = 1000
-
-        lrs = {e: 1e-3 for e in range(LR_CH1)}
-        lrs.update({e: 1e-4 for e in range(LR_CH1, LR_CH2)})
-        lrs.update({e: 1e-5 for e in range(LR_CH2, LR_CH3)})
-
-        lr_sched = Lr_absolute_sched(lrs)
-        ch_sched = Minloss_checkpoint([x for x in range(10, 160, 10)])
-
-        model = Network(data_loader, cache_idx="test0")
-        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), lr_scheduler=lr_sched, 
-                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=lr_sched)
-        model.pretrain_encoder(2, 32, progbar=True)
-        model.copy_model("test0_cpy")
-        model.train(160, 32, progbar=True, checkpoint_sched=ch_sched, copy_at_checkpoint=False)
 
     def _show_stats():
 
@@ -305,7 +282,6 @@ def main():
     #_test_pretrain_baseline()
     #_run_training_detonly()
     _run_training2()
-    #_gridsearch()
     #_show_stats()
     
 if __name__ == "__main__":
