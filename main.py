@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import cv2 as cv
+import random
 
 from data_processing import *
 from anchor_kmeans import *
@@ -143,6 +144,67 @@ def main():
 
             break
 
+    def _test_pretrain_baseline():
+
+        BSIZE = 32
+
+        data_loader = DataLoader(cache_key="all")
+        data_loader.prepare()
+
+        TRAIN_IMG_CNT = data_loader.get_box_cnt("train")
+        VALIDATION_IMG_CNT = data_loader.get_box_cnt("validation")
+
+        def _to_output_t(x): 
+            return floor((x / TRAIN_IMG_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)
+
+        def _to_output_v(x):
+            return floor((x / VALIDATION_IMG_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)
+
+        CLS_CNT = data_loader.get_class_cnt()
+
+        def _get_rand_pred(b):
+            return tf.convert_to_tensor([tf.one_hot(random.randint(0, CLS_CNT - 1), CLS_CNT) for _ in range(b)])
+
+        LR_CH1 = 60
+        LR_CH2 = 90
+        LR_CH3 = 1000
+
+        lrs = {e: 1e-3 for e in range(LR_CH1)}
+        lrs.update({e: 1e-4 for e in range(LR_CH1, LR_CH2)})
+        lrs.update({e: 1e-5 for e in range(LR_CH2, LR_CH3)})
+
+        lr_sched = Lr_absolute_sched(lrs)
+        ch_sched = Minloss_checkpoint([x for x in range(10, 160, 10)])
+
+        model = Network(data_loader, cache_idx="test00000")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), lr_scheduler=lr_sched, 
+                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=lr_sched)
+
+        val_loss = 0
+        train_loss = 0
+
+        val_acc = 0
+        train_acc = 0
+
+        '''for (_, gt) in data_loader.load_pretrain_data(BSIZE, "train"):
+            
+            out = _get_rand_pred()
+            train_loss += encoder_loss(out, gt)
+            train_acc += encoder_accuracy(out, gt)'''
+
+        for (_, gt) in data_loader.load_pretrain_data(BSIZE, "validation"):
+            
+            out = _get_rand_pred(gt.shape[0])
+            val_loss += encoder_loss(out, gt)
+            val_acc += encoder_accuracy(out, gt)
+
+        val_loss = _to_output_v(val_loss)
+        train_loss = _to_output_t(train_loss)
+        val_acc = _to_output_v(val_loss)
+        train_acc = _to_output_t(train_loss)
+
+        print(val_loss, train_loss, val_acc, train_acc)            
+
     def _run_training_detonly():
 
         data_loader = DataLoader(cache_key="all")
@@ -181,25 +243,69 @@ def main():
         lr_sched = Lr_absolute_sched(lrs)
         ch_sched = Minloss_checkpoint([x for x in range(10, 160, 10)])
 
-        model = Network(data_loader, cache_idx="testclasif")
+        model = Network(data_loader, cache_idx="test0")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), lr_scheduler=lr_sched, 
-                                pretrain_optimizer=tf.keras.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=lr_sched)
-        model.pretrain_encoder(10, 32, progbar=True)
-        #model.train(160, 64, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False)
+                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=lr_sched)
+        model.pretrain_encoder(2, 32, progbar=True)
+        model.train(160, 32, progbar=True, checkpoint_sched=ch_sched, copy_at_checkpoint=False)
+
+    def _run_training2():
+
+        data_loader = DataLoader(cache_key="all")
+        data_loader.prepare()
+
+        EPOCHS = 160
+
+        lrs = {e: 5e-5 for e in range(EPOCHS)}
+
+        lr_sched = Lr_absolute_sched(lrs)
+        ch_sched = Minloss_checkpoint([x for x in range(10, 160, 5)])
+
+        model = Network(data_loader, cache_idx="test_adam_5e-5")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), lr_scheduler=lr_sched, 
+                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=lr_sched)
+        model.pretrain_encoder(1, 32, progbar=False, copy_at_checkpoint=False)
+        model.train(160, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=True, save_on_keyboard_interrupt=False)
+
+    # TODO
+    def _gridsearch():
+
+        data_loader = DataLoader(cache_key="all")
+        data_loader.prepare()
+
+        LR_CH1 = 60
+        LR_CH2 = 90
+        LR_CH3 = 1000
+
+        lrs = {e: 1e-3 for e in range(LR_CH1)}
+        lrs.update({e: 1e-4 for e in range(LR_CH1, LR_CH2)})
+        lrs.update({e: 1e-5 for e in range(LR_CH2, LR_CH3)})
+
+        lr_sched = Lr_absolute_sched(lrs)
+        ch_sched = Minloss_checkpoint([x for x in range(10, 160, 10)])
+
+        model = Network(data_loader, cache_idx="test0")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), lr_scheduler=lr_sched, 
+                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=lr_sched)
+        model.pretrain_encoder(2, 32, progbar=True)
+        model.copy_model("test0_cpy")
+        model.train(160, 32, progbar=True, checkpoint_sched=ch_sched, copy_at_checkpoint=False)
 
     def _show_stats():
 
         data_loader = DataLoader(cache_key="all")
         model = Network(data_loader, cache_idx="afull")
-        model.plot_pretrain_stats(show_on_screen=True, save_image=False)
+        #model.plot_pretrain_stats(show_on_screen=True, save_image=False)
         model.plot_stats(show_on_screen=True, save_image=False)
 
-    _test_mask_encoding()
+    #_test_mask_encoding()
     #_test_boxes()
     #_test_for_nan_inf()
     #_test_learning_few_img()
+    #_test_pretrain_baseline()
     #_run_training_detonly()
-    #_run_training()
+    _run_training2()
+    #_gridsearch()
     #_show_stats()
     
 if __name__ == "__main__":

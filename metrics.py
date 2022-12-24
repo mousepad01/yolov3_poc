@@ -61,14 +61,6 @@ def yolov3_loss_perscale(output, obj_mask, ignored_mask, target_mask):
     wh_loss = WH_COEFF * tf.math.reduce_sum(wh_loss)
     coord_loss = (xy_loss + wh_loss)
     
-    '''print(f"no obj loss = {no_object_loss}")
-    print(f"obj loss = {object_loss}")
-    print(f"classif loss = {classification_loss}")
-    print(f"xy loss = {xy_loss}")
-    print(f"wh loss = {wh_loss}")
-    print(f"coord loss = {coord_loss}")
-    print("\n")'''
-    
     total_loss = no_object_loss + object_loss + classification_loss + coord_loss
     return total_loss, no_object_loss, object_loss, classification_loss, xy_loss, wh_loss
 

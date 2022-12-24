@@ -393,7 +393,8 @@ class Network:
             stats = [train_loss_stats, validation_loss_stats, train_accuracy_stats, validation_accuracy_stats]
             self.cache_manager.store_pretrain_stats(stats)
 
-    def train(self, epochs, batch_size, progbar=True, checkpoint_sched=lambda epoch, loss, vloss: False, copy_at_checkpoint=True, burnin=True):
+    def train(self, epochs, batch_size, progbar=True, checkpoint_sched=lambda epoch, loss, vloss: False, copy_at_checkpoint=True, 
+                burnin=False, save_on_keyboard_interrupt=True):
         '''
             * epochs: number of total epochs (effective number of epochs executed: epochs - self.next_train_epoch + 1)
             * batch_size: for training
@@ -517,6 +518,10 @@ class Network:
                         xy += xy_ + xy__
                         wh += wh_ + wh__
 
+                    if tf.reduce_sum(tf.cast(tf.math.is_nan(loss_value), tf.int32)) > 0:
+                        tf.print(f"loss became nan at epoch {epoch} batch idx {batch_idx}")
+                        return "nan found"
+
                     gradients = tape.gradient(loss_value, self.full_network.trainable_weights)
                     self.full_network.optimizer.apply_gradients(zip(gradients, self.full_network.trainable_weights))
 
@@ -567,19 +572,28 @@ class Network:
                     val_loss_xy += xy_
                     val_loss_wh += wh_
 
+                if tf.reduce_sum(tf.cast(tf.math.is_nan(val_loss), tf.int32)) > 0:
+                    tf.print(f"val loss became nan at epoch {epoch}")
+                    return "nan found"
+
             except KeyboardInterrupt:
 
-                tf.print(f"\nTraining paused at epoch {epoch}")
+                if save_on_keyboard_interrupt:
 
-                self.next_train_epoch = epoch
-                self.cache_manager.store_model()
+                    tf.print(f"\nTraining paused at epoch {epoch}.")
 
-                stats = [train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj,
-                        train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh,
-                        validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj,
-                        validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh]
+                    self.next_train_epoch = epoch
+                    self.cache_manager.store_model()
 
-                self.cache_manager.store_stats(stats)
+                    stats = [train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj,
+                            train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh,
+                            validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj,
+                            validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh]
+
+                    self.cache_manager.store_stats(stats)
+
+                else:
+                    tf.print(f"\nTraining stopped at epoch {epoch} - no checkpoint occured.")
 
                 return
 
@@ -730,17 +744,27 @@ class NetworkCacheManager:
                                                         )
         tf.keras.models.save_model(encoder, f"{MODEL_CACHE_PATH}{self.cache_key}_{new_cache_idx}_pretrain_model", overwrite=True)
 
-        with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{self.cache_idx}_stats", "rb") as stats_f:
-            with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{new_cache_idx}_stats", "wb+") as stats_f_:
+        try:
 
-                stats = stats_f.read()
-                stats_f_.write(stats)
+            with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{self.cache_idx}_stats", "rb") as stats_f:
+                with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{new_cache_idx}_stats", "wb+") as stats_f_:
 
-        with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{self.cache_idx}_pretrain_stats", "rb") as stats_f:
-            with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{new_cache_idx}_pretrain_stats", "wb+") as stats_f_:
+                    stats = stats_f.read()
+                    stats_f_.write(stats)
 
-                stats = stats_f.read()
-                stats_f_.write(stats)
+        except FileNotFoundError:
+            pass
+
+        try:
+
+            with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{self.cache_idx}_pretrain_stats", "rb") as stats_f:
+                with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{new_cache_idx}_pretrain_stats", "wb+") as stats_f_:
+
+                    stats = stats_f.read()
+                    stats_f_.write(stats)
+
+        except FileNotFoundError:
+            pass
 
         tf.print(f"Model copied from idx {self.cache_idx} to idx {new_cache_idx}.")
 
