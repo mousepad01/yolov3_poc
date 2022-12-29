@@ -134,8 +134,11 @@ class DataLoader:
             * gt gets loaded on GPU at ???
         '''
 
-        keys = self.imgs[purpose].keys()
+        keys = list(self.imgs[purpose].keys())
         random.shuffle(keys)
+
+        # TODO rem
+        yield keys
 
         current_img_loaded = []
         current_om_loaded = [[] for _ in range(SCALE_CNT)]
@@ -153,7 +156,7 @@ class DataLoader:
                 current_im_loaded[d].append(gt[1][d])
                 current_tm_loaded[d].append(gt[2][d])
 
-            if len(current_loaded) == batch_size:
+            if len(current_img_loaded) == batch_size:
 
                 yield (tf.convert_to_tensor(current_img_loaded, dtype=tf.float32) / 255.0) * 2.0 - 1.0, \
                         tf.convert_to_tensor(current_om_loaded[0]), \
@@ -164,11 +167,14 @@ class DataLoader:
                         tf.convert_to_tensor(current_tm_loaded[1]), \
                         tf.convert_to_tensor(current_om_loaded[2]), \
                         tf.convert_to_tensor(current_im_loaded[2]), \
-                        tf.convert_to_tensor(current_tm_loaded[2]), \
+                        tf.convert_to_tensor(current_tm_loaded[2])
 
-                current_loaded = []
+                current_img_loaded = []
+                current_om_loaded = [[] for _ in range(SCALE_CNT)]
+                current_im_loaded = [[] for _ in range(SCALE_CNT)]
+                current_tm_loaded = [[] for _ in range(SCALE_CNT)]
 
-        if len(current_loaded) > 0:
+        if len(current_img_loaded) > 0:
 
             yield (tf.convert_to_tensor(current_img_loaded, dtype=tf.float32) / 255.0) * 2.0 - 1.0, \
                     tf.convert_to_tensor(current_om_loaded[0]), \
@@ -179,7 +185,7 @@ class DataLoader:
                     tf.convert_to_tensor(current_tm_loaded[1]), \
                     tf.convert_to_tensor(current_om_loaded[2]), \
                     tf.convert_to_tensor(current_im_loaded[2]), \
-                    tf.convert_to_tensor(current_tm_loaded[2]), \
+                    tf.convert_to_tensor(current_tm_loaded[2])
 
     def load_boxes(self, purpose):
         
@@ -752,17 +758,10 @@ class DataCacheManager:
             else:
                 cache_key = self.cache_key
 
-            with open(f"{DATA_CACHE_PATH}{cache_key}/om_{img_id}.bin", "rb") as cache_f:
+            with open(f"{DATA_CACHE_PATH}{cache_key}/gt_{img_id}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
-            obj_masks = pickle.loads(zlib.decompress(raw_cache))
-
-            with open(f"{DATA_CACHE_PATH}{cache_key}/im_{img_id}.bin", "rb") as cache_f:
-                raw_cache = cache_f.read()
-            ignored_masks = pickle.loads(zlib.decompress(raw_cache))
-
-            with open(f"{DATA_CACHE_PATH}{cache_key}/tm_{img_id}.bin", "rb") as cache_f:
-                raw_cache = cache_f.read()
-            target_masks = pickle.loads(zlib.decompress(raw_cache))
+            gt = pickle.loads(zlib.decompress(raw_cache))
+            obj_masks, ignored_masks, target_masks = gt
 
             if len(self._permanent_gt) < PERMANENT_DATA_ENTRIES:
 
@@ -796,11 +795,28 @@ class DataCacheManager:
         else:
             cache_key = self.cache_key
 
-        with open(f"{DATA_CACHE_PATH}{cache_key}/om_{img_id}.bin", "wb+") as cache_f:
-            cache_f.write(zlib.compress(pickle.dumps(obj_gt), 1))
+        gt = (obj_gt, ignored_gt, target_gt)
 
-        with open(f"{DATA_CACHE_PATH}{cache_key}/im_{img_id}.bin", "wb+") as cache_f:
-            cache_f.write(zlib.compress(pickle.dumps(ignored_gt), 1))
+        with open(f"{DATA_CACHE_PATH}{cache_key}/gt_{img_id}.bin", "wb+") as cache_f:
+            cache_f.write(zlib.compress(pickle.dumps(gt), 1))
 
-        with open(f"{DATA_CACHE_PATH}{cache_key}/tm_{img_id}.bin", "wb+") as cache_f:
-            cache_f.write(zlib.compress(pickle.dumps(target_gt), 1))
+    def _convert_gts(self):
+
+        for purpose in ["train", "validation"]:
+            for k in self.loader.imgs[purpose].keys():
+
+                with open(f"{DATA_CACHE_PATH}{self.cache_key}/om_{k}.bin", "rb") as cache_f:
+                    raw_cache = cache_f.read()
+                om = pickle.loads(zlib.decompress(raw_cache))
+
+                with open(f"{DATA_CACHE_PATH}{self.cache_key}/im_{k}.bin", "rb") as cache_f:
+                    raw_cache = cache_f.read()
+                im = pickle.loads(zlib.decompress(raw_cache))
+
+                with open(f"{DATA_CACHE_PATH}{self.cache_key}/tm_{k}.bin", "rb") as cache_f:
+                    raw_cache = cache_f.read()
+                tm = pickle.loads(zlib.decompress(raw_cache))
+
+                gt = (om, im, tm)
+                with open(f"{DATA_CACHE_PATH}{self.cache_key}/gt_{k}.bin", "wb+") as cache_f:
+                    cache_f.write(zlib.compress(pickle.dumps(gt), 1))

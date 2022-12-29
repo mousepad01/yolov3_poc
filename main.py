@@ -18,19 +18,22 @@ def main():
         data_loader = DataLoader(cache_key="all")
         data_loader.prepare()
 
-        # hack to get img ids
-        def _get_imgid():
-            for imgid in data_loader.imgs["train"].keys():
-                yield imgid
-
         CLS_CNT = data_loader.get_class_cnt()
+        BSIZE = 4
+
+        def _getkeys(l):
+            for e in l:
+                yield e
 
         for _ in range(4):
 
-            img_keys = _get_imgid()
+            dl = data_loader.load_data(BSIZE, "train")
+            img_keys = next(dl)
+            img_keys = _getkeys(img_keys)
+
             for (imgs, obj_mask_size1, ignored_mask_size1, target_mask_size1, \
                         obj_mask_size2, ignored_mask_size2, target_mask_size2, \
-                        obj_mask_size3, ignored_mask_size3, target_mask_size3) in data_loader.load_data(32, "train"):
+                        obj_mask_size3, ignored_mask_size3, target_mask_size3) in dl:
 
                 img_keys_ = []
                 for _ in range(imgs.shape[0]):
@@ -368,7 +371,7 @@ def main():
         data_loader.prepare()
         data_loader.cache_manager._convert_gts()
 
-    #_test_mask_encoding()
+    _test_mask_encoding()
     #_test_loss()
     #_test_boxes()
     #_test_for_nan_inf()
@@ -377,7 +380,7 @@ def main():
     #_run_training_detonly()
     #_run_training2()
     #_show_stats()
-    _convert_gt()
+    #_convert_gt()
     
 if __name__ == "__main__":
     main()
