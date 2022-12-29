@@ -51,9 +51,11 @@ def yolov3_loss_perscale(output, obj_mask, ignored_mask, target_mask):
     classification_loss = CLASSIF_COEFF * tf.math.reduce_sum(classification_loss)
 
     # coordinates loss
-    output_xy = output[..., 0:2]
+    output_xy = tf.sigmoid(output[..., 0:2])
+    #output_xy = output[..., 0:2]
     output_wh = output[..., 2:4]
-    target_coord_xy = target_mask[..., 0:2]
+    target_coord_xy = tf.sigmoid(target_mask[..., 0:2])
+    #target_coord_xy = target_mask[..., 0:2]
     target_coord_wh = target_mask[..., 2:4]
     xy_loss =  obj_mask * tf.square(target_coord_xy - output_xy)
     xy_loss = XY_COEFF * tf.math.reduce_sum(xy_loss)

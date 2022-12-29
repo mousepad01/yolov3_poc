@@ -70,6 +70,50 @@ def main():
                                     data_loader.onehot_to_name,
                                     data_loader.imgs["train"][img_id]["objs"])
 
+    def _test_loss():
+
+        data_loader = DataLoader(cache_key="all")
+        data_loader.prepare()
+
+        BSIZE = 32
+        CLS_CNT = data_loader.get_class_cnt()
+
+        for (_, obj_mask_size1, ignored_mask_size1, target_mask_size1, \
+                obj_mask_size2, ignored_mask_size2, target_mask_size2, \
+                obj_mask_size3, ignored_mask_size3, target_mask_size3) in data_loader.load_data(BSIZE, "train"):
+
+            obj_anchor_masks = [obj_mask_size1, obj_mask_size2, obj_mask_size3]
+            ignored_anchor_masks = [ignored_mask_size1, ignored_mask_size2, ignored_mask_size3]
+            target_anchor_masks = [target_mask_size1, target_mask_size2, target_mask_size3]
+
+            loss_value, noobj, obj, cl, xy, wh = 0, 0, 0, 0, 0, 0
+            for d in range(SCALE_CNT):
+
+                B, S, A = target_anchor_masks[d].shape[0], target_anchor_masks[d].shape[1], target_anchor_masks[d].shape[3]
+                t_xywh = target_anchor_masks[d][..., 0:4]
+                to = tf.cast(tf.fill((B, S, S, A, 1), value=100.0), dtype=tf.float32) * obj_anchor_masks[d] + \
+                        tf.cast(tf.fill((B, S, S, A, 1), value=-100.0), dtype=tf.float32) * (1 - obj_anchor_masks[d] - ignored_anchor_masks[d]) + \
+                        tf.random.uniform((B, S, S, A, 1), minval=-10.0, maxval=10.0) * ignored_anchor_masks[d]
+                probabilities = tf.cast(tf.one_hot(tf.cast(target_anchor_masks[d][..., 4], dtype=tf.int32), CLS_CNT) * 100.0, dtype=tf.float32)
+                output_from_gt = tf.concat([t_xywh, to, probabilities], axis=-1) 
+
+                loss_value_, noobj_, obj_, cl_, xy_, wh_ = yolov3_loss_perscale(output_from_gt, obj_anchor_masks[d], ignored_anchor_masks[d], target_anchor_masks[d])
+
+                loss_value += loss_value_
+                noobj += noobj_
+                obj += obj_
+                cl += cl_
+                xy += xy_
+                wh += wh_
+
+            print(f"loss {loss_value / BSIZE} (total {loss_value})")
+            print(f"noobj {noobj / BSIZE}")
+            print(f"obj {obj / BSIZE}")
+            print(f"cl {cl / BSIZE}")
+            print(f"xy {xy / BSIZE}")
+            print(f"wh {wh / BSIZE}")
+            print(f"================================\n")
+
     def _test_boxes():
 
         data_loader = DataLoader(cache_key="all")
@@ -233,18 +277,19 @@ def main():
         EPOCHS = 160
         P_EPOCHS = 10
 
-        lr_sched = Lr_cosine_decay(1e-5, 1e-4, EPOCHS)
+        lrs = {e: 5e-5 for e in range(EPOCHS)}
+        lr_sched = Lr_dict_sched(lrs)
 
         p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
         p_lr_sched = Lr_dict_sched(p_lrs)
 
-        ch_sched = Minloss_checkpoint([x for x in range(10, 160, 5)])
+        ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
 
-        model = Network(data_loader, cache_idx="test_sgd_1e-4_cosdecay")
-        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-4, momentum=0.9), lr_scheduler=lr_sched, 
+        model = Network(data_loader, cache_idx="test_adam_5e-5_changedloss")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), lr_scheduler=lr_sched, 
                                 pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=p_lr_sched)
         model.pretrain_encoder(1, 32, progbar=False, copy_at_checkpoint=False)
-        model.train(160, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=True, save_on_keyboard_interrupt=False)
+        model.train(EPOCHS, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False, save_on_keyboard_interrupt=False, burnin=False)
 
     def _run_training2():
 
@@ -260,29 +305,79 @@ def main():
         p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
         p_lr_sched = Lr_dict_sched(p_lrs)
 
-        ch_sched = Minloss_checkpoint([x for x in range(10, 160, 5)])
+        ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
 
-        model = Network(data_loader, cache_idx="test_adam_5e-5")
+        model = Network(data_loader, cache_idx="test_adam_5e-5_wpretrain")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), lr_scheduler=lr_sched, 
                                 pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=p_lr_sched)
         model.pretrain_encoder(1, 32, progbar=False, copy_at_checkpoint=False)
-        model.train(160, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=True, save_on_keyboard_interrupt=False)
+        model.train(EPOCHS, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False, save_on_keyboard_interrupt=False, burnin=False)
+
+    def _run_training3():
+
+        data_loader = DataLoader(cache_key="all")
+        data_loader.prepare()
+
+        EPOCHS = 160
+        P_EPOCHS = 10
+
+        lr_sched = Lr_cosine_decay(1e-5, 1e-4, EPOCHS)
+
+        p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
+        p_lr_sched = Lr_dict_sched(p_lrs)
+
+        ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
+
+        model = Network(data_loader, cache_idx="test_adam_1e-4_changedloss_cosdecay")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(1e-4), lr_scheduler=lr_sched, 
+                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=p_lr_sched)
+        model.pretrain_encoder(1, 32, progbar=False, copy_at_checkpoint=False)
+        model.train(EPOCHS, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False, save_on_keyboard_interrupt=False, burnin=False)
+
+    def _run_training4():
+
+        data_loader = DataLoader(cache_key="all")
+        data_loader.prepare()
+
+        EPOCHS = 160
+        P_EPOCHS = 10
+
+        lr_sched = Lr_cosine_decay(1e-5, 5e-5, EPOCHS)
+
+        p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
+        p_lr_sched = Lr_dict_sched(p_lrs)
+
+        ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
+
+        model = Network(data_loader, cache_idx="test_adam_5e-5_changedloss_cosdecay_midmodel")
+        model.build_components(backbone="mid", optimizer=tf.optimizers.Adam(5e-5), lr_scheduler=lr_sched, 
+                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=p_lr_sched)
+        model.pretrain_encoder(1, 32, progbar=False, copy_at_checkpoint=False)
+        model.train(EPOCHS, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False, save_on_keyboard_interrupt=False, burnin=False)
 
     def _show_stats():
 
         data_loader = DataLoader(cache_key="all")
-        model = Network(data_loader, cache_idx="afull")
+        model = Network(data_loader, cache_idx="test_adam_5e-5_changedloss")
         #model.plot_pretrain_stats(show_on_screen=True, save_image=False)
         model.plot_stats(show_on_screen=True, save_image=False)
 
+    def _convert_gt():
+
+        data_loader = DataLoader(cache_key="all")
+        data_loader.prepare()
+        data_loader.cache_manager._convert_gts()
+
     #_test_mask_encoding()
+    #_test_loss()
     #_test_boxes()
     #_test_for_nan_inf()
     #_test_learning_few_img()
     #_test_pretrain_baseline()
     #_run_training_detonly()
-    _run_training2()
+    #_run_training2()
     #_show_stats()
+    _convert_gt()
     
 if __name__ == "__main__":
     main()

@@ -132,6 +132,11 @@ class Network:
             self.full_network = build_darknet53_full(CLASS_COUNT)
             self.encoder = build_darknet53_encoder(CLASS_COUNT)
 
+        elif backbone == "mid":
+
+            self.full_network = build_mid_full(CLASS_COUNT)
+            self.encoder = build_mid_encoder(CLASS_COUNT)
+
         elif backbone == "small":
 
             self.full_network = build_small_full(CLASS_COUNT)
