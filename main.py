@@ -288,72 +288,8 @@ def main():
 
         ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
 
-        model = Network(data_loader, cache_idx="test_adam_5e-5_changedloss")
+        model = Network(data_loader, cache_idx="test_adam_5e-5")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), lr_scheduler=lr_sched, 
-                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=p_lr_sched)
-        model.pretrain_encoder(1, 32, progbar=False, copy_at_checkpoint=False)
-        model.train(EPOCHS, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False, save_on_keyboard_interrupt=False, burnin=False)
-
-    def _run_training2():
-
-        data_loader = DataLoader(cache_key="all")
-        data_loader.prepare()
-
-        EPOCHS = 160
-        P_EPOCHS = 10
-
-        lrs = {e: 5e-5 for e in range(EPOCHS)}
-        lr_sched = Lr_dict_sched(lrs)
-
-        p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
-        p_lr_sched = Lr_dict_sched(p_lrs)
-
-        ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
-
-        model = Network(data_loader, cache_idx="test_adam_5e-5_wpretrain")
-        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), lr_scheduler=lr_sched, 
-                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=p_lr_sched)
-        model.pretrain_encoder(1, 32, progbar=False, copy_at_checkpoint=False)
-        model.train(EPOCHS, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False, save_on_keyboard_interrupt=False, burnin=False)
-
-    def _run_training3():
-
-        data_loader = DataLoader(cache_key="all")
-        data_loader.prepare()
-
-        EPOCHS = 160
-        P_EPOCHS = 10
-
-        lr_sched = Lr_cosine_decay(1e-5, 1e-4, EPOCHS)
-
-        p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
-        p_lr_sched = Lr_dict_sched(p_lrs)
-
-        ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
-
-        model = Network(data_loader, cache_idx="test_adam_1e-4_changedloss_cosdecay")
-        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(1e-4), lr_scheduler=lr_sched, 
-                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=p_lr_sched)
-        model.pretrain_encoder(1, 32, progbar=False, copy_at_checkpoint=False)
-        model.train(EPOCHS, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False, save_on_keyboard_interrupt=False, burnin=False)
-
-    def _run_training4():
-
-        data_loader = DataLoader(cache_key="all")
-        data_loader.prepare()
-
-        EPOCHS = 160
-        P_EPOCHS = 10
-
-        lr_sched = Lr_cosine_decay(1e-5, 5e-5, EPOCHS)
-
-        p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
-        p_lr_sched = Lr_dict_sched(p_lrs)
-
-        ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
-
-        model = Network(data_loader, cache_idx="test_adam_5e-5_changedloss_cosdecay_midmodel")
-        model.build_components(backbone="mid", optimizer=tf.optimizers.Adam(5e-5), lr_scheduler=lr_sched, 
                                 pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=p_lr_sched)
         model.pretrain_encoder(1, 32, progbar=False, copy_at_checkpoint=False)
         model.train(EPOCHS, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False, save_on_keyboard_interrupt=False, burnin=False)
@@ -361,17 +297,11 @@ def main():
     def _show_stats():
 
         data_loader = DataLoader(cache_key="all")
-        model = Network(data_loader, cache_idx="test_adam_5e-5_changedloss")
+        model = Network(data_loader, cache_idx="test_adam_5e-5_dshuffle_nopretrain_bsize8")
         #model.plot_pretrain_stats(show_on_screen=True, save_image=False)
         model.plot_stats(show_on_screen=True, save_image=False)
 
-    def _convert_gt():
-
-        data_loader = DataLoader(cache_key="all")
-        data_loader.prepare()
-        data_loader.cache_manager._convert_gts()
-
-    _test_mask_encoding()
+    #_test_mask_encoding()
     #_test_loss()
     #_test_boxes()
     #_test_for_nan_inf()
@@ -379,7 +309,7 @@ def main():
     #_test_pretrain_baseline()
     #_run_training_detonly()
     #_run_training2()
-    #_show_stats()
+    _show_stats()
     #_convert_gt()
     
 if __name__ == "__main__":

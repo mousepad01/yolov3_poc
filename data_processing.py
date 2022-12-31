@@ -87,6 +87,11 @@ class DataLoader:
             how many boxes for train / validation (used only for pre-training)
         '''
 
+        self.max_true_boxes = 0
+        '''
+            maximum true boxes count per image
+        '''
+
         self.validation_ratio = validation_ratio
         '''
             (approximate) ratio of |{val imgs}| / |{all imgs}|
@@ -137,13 +142,13 @@ class DataLoader:
         keys = list(self.imgs[purpose].keys())
         random.shuffle(keys)
 
-        # TODO rem
-        yield keys
+        #yield keys
 
         current_img_loaded = []
         current_om_loaded = [[] for _ in range(SCALE_CNT)]
         current_im_loaded = [[] for _ in range(SCALE_CNT)]
         current_tm_loaded = [[] for _ in range(SCALE_CNT)]
+        current_gtboxes_loaded = []
 
         for k in keys:
 
@@ -156,6 +161,8 @@ class DataLoader:
                 current_im_loaded[d].append(gt[1][d])
                 current_tm_loaded[d].append(gt[2][d])
 
+            current_gtboxes_loaded.append(gt[3])
+
             if len(current_img_loaded) == batch_size:
 
                 yield (tf.convert_to_tensor(current_img_loaded, dtype=tf.float32) / 255.0) * 2.0 - 1.0, \
@@ -167,12 +174,14 @@ class DataLoader:
                         tf.convert_to_tensor(current_tm_loaded[1]), \
                         tf.convert_to_tensor(current_om_loaded[2]), \
                         tf.convert_to_tensor(current_im_loaded[2]), \
-                        tf.convert_to_tensor(current_tm_loaded[2])
+                        tf.convert_to_tensor(current_tm_loaded[2]), \
+                        tf.reshape(tf.convert_to_tensor(current_gtboxes_loaded), (batch_size, 1, 1, 1, self.max_true_boxes, 4))
 
                 current_img_loaded = []
                 current_om_loaded = [[] for _ in range(SCALE_CNT)]
                 current_im_loaded = [[] for _ in range(SCALE_CNT)]
                 current_tm_loaded = [[] for _ in range(SCALE_CNT)]
+                current_gtboxes_loaded = []
 
         if len(current_img_loaded) > 0:
 
@@ -185,7 +194,8 @@ class DataLoader:
                     tf.convert_to_tensor(current_tm_loaded[1]), \
                     tf.convert_to_tensor(current_om_loaded[2]), \
                     tf.convert_to_tensor(current_im_loaded[2]), \
-                    tf.convert_to_tensor(current_tm_loaded[2])
+                    tf.convert_to_tensor(current_tm_loaded[2]), \
+                    tf.reshape(tf.convert_to_tensor(current_gtboxes_loaded), (batch_size, 1, 1, 1, self.max_true_boxes, 4))
 
     def load_boxes(self, purpose):
         
@@ -464,7 +474,10 @@ class DataLoader:
 
             return intersection / union
 
-        # CLASS_CNT = self.get_class_cnt()
+        for purpose in ["train", "validation"]:
+            for img_id in self.imgs[purpose].keys():
+
+                self.max_true_boxes = max(len(self.imgs[purpose][img_id]["objs"]), self.max_true_boxes)
 
         for purpose in ["train", "validation"]:
             
@@ -502,11 +515,11 @@ class DataLoader:
                                 max_iou_idx = a
                                 max_iou_scale = d
 
-                            if current_iou >= IGNORED_ANCHOR_IOU_THRESHOLD:
+                            if current_iou >= IGNORED_IOU_THRESHOLD:
                                 ignore_anchors.append((a, d))
 
                     x_, y_, w_, h_ = x + w // 2, y + h // 2, w, h
-                    x_, y_, w_, h_ = x_ / IMG_SIZE[0], y_ / IMG_SIZE[0], w_ / IMG_SIZE[0], h_ / IMG_SIZE[0]
+                    x_, y_, w_, h_ = x_ / IMG_SIZE[0], y_ / IMG_SIZE[1], w_ / IMG_SIZE[0], h_ / IMG_SIZE[1]
                     x_, y_, w_, h_ = x_ * GRID_CELL_CNT[max_iou_scale], y_ * GRID_CELL_CNT[max_iou_scale], w_ * GRID_CELL_CNT[max_iou_scale], h_ * GRID_CELL_CNT[max_iou_scale]
 
                     if x_ == np.floor(x_):
@@ -519,7 +532,7 @@ class DataLoader:
                     x_, y_ = x_ - cx, y_ - cy 
 
                     anchor_w = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][0] / IMG_SIZE[0])
-                    anchor_h = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][1] / IMG_SIZE[0])
+                    anchor_h = GRID_CELL_CNT[max_iou_scale] * (self.anchors[max_iou_scale][max_iou_idx][1] / IMG_SIZE[1])
 
                     obj_mask[max_iou_scale][cx][cy][max_iou_idx] = [1.0]
                     target_mask[max_iou_scale][cx][cy][max_iou_idx] = np.array(tf.concat([tf.convert_to_tensor([tf.math.log(x_ / (1 - x_))]), 
@@ -540,7 +553,7 @@ class DataLoader:
                     for a_idx, a_scale in ignore_anchors:
                         
                         x_, y_ = x + w // 2, y + h // 2
-                        x_, y_ = x_ / IMG_SIZE[0], y_ / IMG_SIZE[0]
+                        x_, y_ = x_ / IMG_SIZE[0], y_ / IMG_SIZE[1]
                         x_, y_ = x_ * GRID_CELL_CNT[a_scale], y_ * GRID_CELL_CNT[a_scale]
 
                         if x_ == np.floor(x_):
@@ -569,7 +582,22 @@ class DataLoader:
                     ignored_mask[d] = tf.convert_to_tensor(ignored_mask[d], dtype=tf.float32)
                     target_mask[d] = tf.convert_to_tensor(target_mask[d], dtype=tf.float32)
 
-                self.cache_manager.store_gt(obj_mask, ignored_mask, target_mask, img_id)
+                gt_boxes = []
+                for bbox_d in self.imgs[purpose][img_id]["objs"]:
+
+                    x, y, w, h = bbox_d["bbox"]
+                    xmin, ymin, xmax, ymax = x, y, x + w, y + h
+                    xmin, ymin, xmax, ymax = xmin / IMG_SIZE[0], ymin / IMG_SIZE[1], xmax / IMG_SIZE[0], ymax / IMG_SIZE[1]
+
+                    gt_boxes.append([xmin, ymin, xmax, ymax])
+
+                for _ in range(len(gt_boxes), self.max_true_boxes, 1):
+                    gt_boxes.append([0, 0, 0, 0])
+
+                assert(len(gt_boxes) == self.max_true_boxes)
+                gt_boxes = tf.convert_to_tensor(gt_boxes, dtype=tf.float32)
+
+                self.cache_manager.store_gt(obj_mask, ignored_mask, target_mask, gt_boxes, img_id)
 
     def test_for_nan_inf(self):
 
@@ -746,7 +774,8 @@ class DataCacheManager:
             if COMPRESS_GT_CACHE_LEVEL != 0:
                 return (pickle.loads(zlib.decompress(self._permanent_gt[img_id][0])), \
                         pickle.loads(zlib.decompress(self._permanent_gt[img_id][1])), \
-                        pickle.loads(zlib.decompress(self._permanent_gt[img_id][2])))
+                        pickle.loads(zlib.decompress(self._permanent_gt[img_id][2])),
+                        self._permanent_gt[img_id][3])
 
             else:
                 return self._permanent_gt[img_id]
@@ -761,18 +790,19 @@ class DataCacheManager:
             with open(f"{DATA_CACHE_PATH}{cache_key}/gt_{img_id}.bin", "rb") as cache_f:
                 raw_cache = cache_f.read()
             gt = pickle.loads(zlib.decompress(raw_cache))
-            obj_masks, ignored_masks, target_masks = gt
+            obj_masks, ignored_masks, target_masks, gt_boxes = gt
 
             if len(self._permanent_gt) < PERMANENT_DATA_ENTRIES:
 
                 if COMPRESS_GT_CACHE_LEVEL != 0:
                     self._permanent_gt[img_id] = (zlib.compress(pickle.dumps(obj_masks), COMPRESS_GT_CACHE_LEVEL), \
                                                     zlib.compress(pickle.dumps(ignored_masks), COMPRESS_GT_CACHE_LEVEL), \
-                                                    zlib.compress(pickle.dumps(target_masks), COMPRESS_GT_CACHE_LEVEL))
+                                                    zlib.compress(pickle.dumps(target_masks), COMPRESS_GT_CACHE_LEVEL),
+                                                    gt_boxes)
                 else:
-                    self._permanent_gt[img_id] = (obj_masks, ignored_masks, target_masks)
+                    self._permanent_gt[img_id] = (obj_masks, ignored_masks, target_masks, gt_boxes)
 
-            return (obj_masks, ignored_masks, target_masks)
+            return (obj_masks, ignored_masks, target_masks, gt_boxes)
 
     def check_gt(self):
 
@@ -788,35 +818,14 @@ class DataCacheManager:
         
         return False
 
-    def store_gt(self, obj_gt, ignored_gt, target_gt, img_id):
+    def store_gt(self, obj_gt, ignored_gt, target_gt, gt_boxes, img_id):
 
         if self.cache_key is None:
             cache_key = TMP_CACHE_KEY
         else:
             cache_key = self.cache_key
 
-        gt = (obj_gt, ignored_gt, target_gt)
+        gt = (obj_gt, ignored_gt, target_gt, gt_boxes)
 
         with open(f"{DATA_CACHE_PATH}{cache_key}/gt_{img_id}.bin", "wb+") as cache_f:
             cache_f.write(zlib.compress(pickle.dumps(gt), 1))
-
-    def _convert_gts(self):
-
-        for purpose in ["train", "validation"]:
-            for k in self.loader.imgs[purpose].keys():
-
-                with open(f"{DATA_CACHE_PATH}{self.cache_key}/om_{k}.bin", "rb") as cache_f:
-                    raw_cache = cache_f.read()
-                om = pickle.loads(zlib.decompress(raw_cache))
-
-                with open(f"{DATA_CACHE_PATH}{self.cache_key}/im_{k}.bin", "rb") as cache_f:
-                    raw_cache = cache_f.read()
-                im = pickle.loads(zlib.decompress(raw_cache))
-
-                with open(f"{DATA_CACHE_PATH}{self.cache_key}/tm_{k}.bin", "rb") as cache_f:
-                    raw_cache = cache_f.read()
-                tm = pickle.loads(zlib.decompress(raw_cache))
-
-                gt = (om, im, tm)
-                with open(f"{DATA_CACHE_PATH}{self.cache_key}/gt_{k}.bin", "wb+") as cache_f:
-                    cache_f.write(zlib.compress(pickle.dumps(gt), 1))
