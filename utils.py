@@ -1,141 +1,87 @@
+import tensorflow as tf
 
-'''
-    Various constants needed in whatever places
-'''
+from constants import *
 
-'''
-    ############################################ CACHE AND DATA LOADING ############################################
-'''
+@tf.function
+def get_c_idx(S):
+    '''
+        calculate array of shape 1 x S x S x 1 x 2 -> (i, j) in S x S
+    '''
 
-TRAIN_DATA_PATH = "./data/train2017/"
-'''
-    train data path
-'''
+    all_idx = tf.range(0, S)
 
-VALIDATION_DATA_PATH = "./data/val2017/"
-'''
-    validation data path
-'''
+    h_idx = tf.tile(all_idx, (S,))
+    
+    all_idx = tf.expand_dims(all_idx, 0)
+    
+    w_idx = tf.tile(all_idx, (S, 1))
+    w_idx = tf.transpose(w_idx)
+    w_idx = tf.reshape(w_idx, (S * S,))
 
-TRAIN_INFO_PATH = "./data/annotations/instances_train2017.json"
-'''
-    train metadata
-'''
+    c_idx = tf.stack([w_idx, h_idx])
+    c_idx = tf.transpose(c_idx)
+    c_idx = tf.reshape(c_idx, (1, S, S, 1, 2))
 
-VALIDATION_INFO_PATH = "./data/annotations/instances_val2017.json"
-'''
-    validation metadata
-'''
+    return c_idx
 
-DATA_CACHE_PATH = "./data_cache/"
-'''
-    (relative) path for storing data (anchors, gt masks) caches
-'''
+@tf.function
+def iou(fst_xy_min, fst_xy_max, snd_xy_min, snd_xy_max):
+    '''
+        vectorized IOU
+    '''
+    
+    lo = tf.maximum(fst_xy_min, snd_xy_min)
+    hi = tf.minimum(fst_xy_max, snd_xy_max)
 
-MODEL_CACHE_PATH = "./saved_models/"
-'''
-    (relative) path for storing saved models
-'''
+    difs = tf.maximum(hi - lo, 0)
 
-TRAIN_STATS_PATH = "./train_stats/"
-'''
-    (relative) path for storing train statistics
-'''
+    intersection = difs[..., 0] * difs[..., 1]
+    
+    fst_difs = fst_xy_max - fst_xy_min
+    snd_difs = snd_xy_max - snd_xy_min
 
-TMP_CACHE_KEY = "tmp"
-'''
-    key for temporary cache, if needed
-'''
+    union = fst_difs[..., 0] * fst_difs[..., 1] + snd_difs[..., 0] * snd_difs[..., 1] - intersection
 
-PRETRAIN_DATA_LOAD_BATCH_SIZE = 128
-'''
-    batch size just for loading (pretrain data)
-'''
+    return intersection / union
 
-PRETRAIN_GT_LOAD_BATCH_SIZE = PRETRAIN_DATA_LOAD_BATCH_SIZE
-'''
-    batch size just for loading ground truth (bool masks, target masks)
-'''
-assert(PRETRAIN_GT_LOAD_BATCH_SIZE == PRETRAIN_DATA_LOAD_BATCH_SIZE)
+def non_maximum_supression(pred_xy_min, pred_xy_max, pred_class, pred_class_p, iou_threshold):
+    '''
+        pred_xy_min, pred_xy_max: (list of SCALE_CNT=3) PREDS x 2
+        pred_class: (list of SCALE_CNT=3) PREDS
+        pred_class_p: (list of SCALE_CNT=3) PREDS
 
-PERMANENT_DATA_ENTRIES = 1000000
-'''
-    how many data entries (imgs with their gts) to permanently store in memory (and be loaded only once)
-'''
+        returns tensors with the same shapes, but w/o scale axis, and with <= element count
+    '''
 
-PERMANENT_PRETRAIN_DATA_BATCHES = 10000
-'''
-    how many bounding box batches to permanently store in memory (and be loaded only once)
-    * FOR PRETRAIN PHASE ONLY
-'''
+    predictions = [(pred_xy_min[d][idx], pred_xy_max[d][idx], pred_class[d][idx], pred_class_p[d][idx]) for d in range(SCALE_CNT) for idx in range(pred_xy_min[d].shape[0])]
+    predictions.sort(key=lambda x: x[3], reverse=True)
 
-PERMANENT_PRETRAIN_DATA_ENTRIES = PERMANENT_PRETRAIN_DATA_BATCHES * PRETRAIN_DATA_LOAD_BATCH_SIZE
-'''
-    how many bounding box entries to permanently store in memory (and be loaded only once)
-    * FOR PRETRAIN PHASE ONLY
-'''
+    nms_xy_min = []
+    nms_xy_max = []
+    nms_class = []
+    nms_class_p = []
 
-COMPRESS_GT_CACHE_LEVEL = 1
-'''
-    * the level of compression of GT cache batches
-    * corresponds to zlib.compress levels
-    * applicable only if there are GT batches cached (when PERMANENT_GT_BATCHES > 0)
-    * usually 1 is good enough, because it compresses all the sparseness
-'''
+    while len(predictions) > 0:
 
-COMPRESS_DATA_CACHE = True
-'''
-    * whether to store image cache as jpg or bitmap in rap
-'''
+        best_pred = predictions.pop(0)
 
-'''
-    ############################################ MODEL CONSTANTS AND OUTPUT ############################################
-'''
+        idx = 0
+        while idx < len(predictions):
+            
+            if iou(best_pred[0], best_pred[1], predictions[idx][0], predictions[idx][1]) >= iou_threshold:
+                predictions.pop(idx)
 
-IMG_SIZE = (416, 416)
-'''
-    fixed image input size
-'''
+            else:
+                idx += 1
 
-MIN_BBOX_DIM = 3
-'''
-    minimum bounding box dimension (w or h, in pixes, after resize to IMG_SIZE)
-    to filter ground truth
-'''
+        nms_xy_min.append(best_pred[0])
+        nms_xy_max.append(best_pred[1])
+        nms_class.append(best_pred[2])
+        nms_class_p.append(best_pred[3])
 
-PRETRAIN_BOX_SIZE = (128, 128)
-'''
-    size for input in classification pre-training of backbone
-'''
+    nms_xy_min = tf.convert_to_tensor(nms_xy_min)
+    nms_xy_max = tf.convert_to_tensor(nms_xy_max)
+    nms_class = tf.convert_to_tensor(nms_class)
+    nms_class_p = tf.convert_to_tensor(nms_class_p)
 
-GRID_CELL_CNT = [13, 26, 52]
-'''
-    for each scale, the value of S
-'''
-
-SCALE_CNT = 3
-'''
-    should be kept fixed, defined as a kind of macro
-'''
-
-ANCHOR_PERSCALE_CNT = 3
-'''
-    numbers of anchor types per scale (A dimension)
-'''
-
-IGNORED_IOU_THRESHOLD = 0.5
-'''
-    min IOU for non-assigned anchors or predictions, for them to be completely ignored in loss function
-'''
-
-CLASS_TO_COLOR = [(255, 0, 0), (0, 0, 255), (0, 255, 0), (0, 0, 0), (255, 0, 255), (255, 255, 0), (0, 255, 255), (165, 42, 42), (255, 140, 0), (255, 255, 255)] * 10
-'''
-    class one hot encoding idx to color
-'''
-for idx, rgb in enumerate(CLASS_TO_COLOR):
-    CLASS_TO_COLOR[idx] = (rgb[2], rgb[1], rgb[0])
-
-LOSS_OUTPUT_PRECISION = 4
-'''
-    how many decimals for loss output - does not influence in any way the model
-'''
+    return nms_xy_min, nms_xy_max, nms_class, nms_class_p

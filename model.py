@@ -7,7 +7,7 @@ import json
 from custom_keras import *
 from checkpoint_scheds import *
 from lr_scheds import *
-from utils import *
+from constants import *
 from metrics import *
 from predictions import *
 from data_processing import *
@@ -663,7 +663,7 @@ class Network:
         elif self._status is Network.TRAINING_DETECTION:
             tf.print(f"Full network has been trained (for detection) {self.next_train_epoch} epochs.")
 
-    def predict(self, threshold=0.6, subset="validation"):
+    def predict(self, threshold=0.6, subset="validation", nms_threshold=0.6):
         
         if self._status < Network.TRAINING_DETECTION:
             tf.print("Network not yet initialized")
@@ -684,7 +684,10 @@ class Network:
             output_class = [output_class_scale0, output_class_scale1, output_class_scale2]
             output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
 
-            show_prediction(np.array(img[0]), output_xy_min, output_xy_max, output_class, output_class_maxp, self.data_loader.onehot_to_name)
+            show_prediction(np.array(((img[0] + 1.0) / 2.0) * 255.0, dtype=np.uint8), \
+                            output_xy_min, output_xy_max, output_class, output_class_maxp, \
+                            self.data_loader.onehot_to_name, \
+                            nms_threshold=nms_threshold)
 
 class NetworkCacheManager:
 

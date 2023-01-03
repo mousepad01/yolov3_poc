@@ -3,7 +3,7 @@ import numpy as np
 import tensorflow as tf
 import pickle
 
-from utils import *
+from constants import *
 from metrics import *
 from predictions import *
 from data_processing import *

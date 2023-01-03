@@ -304,10 +304,12 @@ def main():
     def _test_model():
 
         data_loader = DataLoader(cache_key="all")
+        data_loader.prepare()
+
         model = Network(data_loader, cache_idx="test_adam_5e-5")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9))
 
-        model.predict(subset="train")
+        model.predict(subset="validation")
 
     #_test_mask_encoding()
     #_test_loss()

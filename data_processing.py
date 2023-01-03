@@ -9,7 +9,7 @@ import numpy as np
 import tensorflow as tf
 
 from anchor_kmeans import *
-from utils import *
+from constants import *
 
 class DataLoader:
 

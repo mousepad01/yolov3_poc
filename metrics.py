@@ -1,45 +1,7 @@
 import tensorflow as tf
 
+from constants import *
 from utils import *
-
-@tf.function
-def _get_c_idx(S):
-    '''
-        calculate array of shape 1 x S x S x 1 x 2 -> (i, j) in S x S
-    '''
-
-    all_idx = tf.range(0, S)
-
-    h_idx = tf.tile(all_idx, (S,))
-    
-    all_idx = tf.expand_dims(all_idx, 0)
-    
-    w_idx = tf.tile(all_idx, (S, 1))
-    w_idx = tf.transpose(w_idx)
-    w_idx = tf.reshape(w_idx, (S * S,))
-
-    c_idx = tf.stack([w_idx, h_idx])
-    c_idx = tf.transpose(c_idx)
-    c_idx = tf.reshape(c_idx, (1, S, S, 1, 2))
-
-    return c_idx
-
-@tf.function
-def _iou(output_xy_min, output_xy_max, gt_xy_min, gt_xy_max):
-    
-    lo = tf.maximum(output_xy_min, gt_xy_min)
-    hi = tf.minimum(output_xy_max, gt_xy_max)
-
-    difs = tf.maximum(hi - lo, 0)
-
-    intersection = difs[..., 0] * difs[..., 1]
-    
-    output_difs = output_xy_max - output_xy_min
-    gt_difs = gt_xy_max - gt_xy_min
-
-    union = output_difs[..., 0] * output_difs[..., 1] + gt_difs[..., 0] * gt_difs[..., 1] - intersection
-
-    return intersection / union
 
 @tf.function
 def yolov3_loss_perscale(output, obj_mask, ignored_mask, target_mask, anchors, gt_boxes):
@@ -65,7 +27,7 @@ def yolov3_loss_perscale(output, obj_mask, ignored_mask, target_mask, anchors, g
 
     # check which objects to dynamically ignore from no-objectness
 
-    c_idx = _get_c_idx(S)
+    c_idx = get_c_idx(S)
     grid_cells_cnt = tf.reshape(tf.convert_to_tensor([S, S], dtype=tf.float32), (1, 1, 1, 1, 2))
     
     output_xy = output[..., 0:2]
@@ -87,7 +49,7 @@ def yolov3_loss_perscale(output, obj_mask, ignored_mask, target_mask, anchors, g
     gt_xy_min = gt_boxes[..., 0:2]
     gt_xy_max = gt_boxes[..., 2:4]
 
-    pred_gt_iou = _iou(output_xy_min, output_xy_max, gt_xy_min, gt_xy_max)
+    pred_gt_iou = iou(output_xy_min, output_xy_max, gt_xy_min, gt_xy_max)
     # B x S x S x A x GT
 
     max_pred_gt_iou = tf.reduce_max(pred_gt_iou, axis=4)
