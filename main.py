@@ -297,9 +297,17 @@ def main():
     def _show_stats():
 
         data_loader = DataLoader(cache_key="all")
-        model = Network(data_loader, cache_idx="test_adam_5e-5_dshuffle_nopretrain_bsize8")
+        model = Network(data_loader, cache_idx="test_adam_5e-5")
         #model.plot_pretrain_stats(show_on_screen=True, save_image=False)
         model.plot_stats(show_on_screen=True, save_image=False)
+
+    def _test_model():
+
+        data_loader = DataLoader(cache_key="all")
+        model = Network(data_loader, cache_idx="test_adam_5e-5")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9))
+
+        model.predict(subset="train")
 
     #_test_mask_encoding()
     #_test_loss()
@@ -308,9 +316,9 @@ def main():
     #_test_learning_few_img()
     #_test_pretrain_baseline()
     #_run_training_detonly()
-    #_run_training2()
-    _show_stats()
-    #_convert_gt()
+    #_run_training()
+    #_show_stats()
+    _test_model()
     
 if __name__ == "__main__":
     main()

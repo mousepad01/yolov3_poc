@@ -663,13 +663,13 @@ class Network:
         elif self._status is Network.TRAINING_DETECTION:
             tf.print(f"Full network has been trained (for detection) {self.next_train_epoch} epochs.")
 
-    def predict(self, threshold=0.6):
+    def predict(self, threshold=0.6, subset="validation"):
         
         if self._status < Network.TRAINING_DETECTION:
             tf.print("Network not yet initialized")
             return
 
-        for (img, _, _, _, _, _, _, _, _, _, _) in self.data_loader.load_data(1, "validation"):
+        for (img, _, _, _, _, _, _, _, _, _, _) in self.data_loader.load_data(1, subset):
 
             out_scale1, out_scale2, out_scale3 = self.full_network(img, training=False)
 

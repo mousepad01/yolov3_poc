@@ -175,7 +175,7 @@ class DataLoader:
                         tf.convert_to_tensor(current_om_loaded[2]), \
                         tf.convert_to_tensor(current_im_loaded[2]), \
                         tf.convert_to_tensor(current_tm_loaded[2]), \
-                        tf.reshape(tf.convert_to_tensor(current_gtboxes_loaded), (batch_size, 1, 1, 1, self.max_true_boxes, 4))
+                        tf.reshape(tf.convert_to_tensor(current_gtboxes_loaded), (batch_size, 1, 1, 1, -1, 4))
 
                 current_img_loaded = []
                 current_om_loaded = [[] for _ in range(SCALE_CNT)]
@@ -195,7 +195,7 @@ class DataLoader:
                     tf.convert_to_tensor(current_om_loaded[2]), \
                     tf.convert_to_tensor(current_im_loaded[2]), \
                     tf.convert_to_tensor(current_tm_loaded[2]), \
-                    tf.reshape(tf.convert_to_tensor(current_gtboxes_loaded), (batch_size, 1, 1, 1, self.max_true_boxes, 4))
+                    tf.reshape(tf.convert_to_tensor(current_gtboxes_loaded), (len(current_img_loaded), 1, 1, 1, -1, 4))
 
     def load_boxes(self, purpose):
         
@@ -665,18 +665,20 @@ class DataCacheManager:
 
         if self.cache_key is not None:
 
-            try:
-                
+            if os.path.exists(f"{DATA_CACHE_PATH}{self.cache_key}/"):
+
                 with open(f"{DATA_CACHE_PATH}{self.cache_key}/anchors.bin", "rb") as cache_f:
                     raw_cache = cache_f.read()
 
                 self.loader.anchors = pickle.loads(raw_cache)
-
+                
                 tf.print("Cache found. Anchors loaded.")
+                return
+            
+            os.mkdir(f"{DATA_CACHE_PATH}{self.cache_key}/")
 
-            except FileNotFoundError:
-                tf.print("Anchor cache not found. Operations will be fully executed and a new cache will be created.")
-    
+            tf.print("Anchor cache not found. Operations will be fully executed and a new cache will be created")
+
     def store_anchors(self):
 
         if self.cache_key is not None:
@@ -808,7 +810,7 @@ class DataCacheManager:
 
         if self.cache_key is not None:
 
-            if os.path.exists(f"{DATA_CACHE_PATH}{self.cache_key}/"):
+            if len(os.listdir(f"{DATA_CACHE_PATH}{self.cache_key}/")) > 1:
 
                 tf.print("Cache found for ground truth masks. It will be loaded when needed")
                 return True

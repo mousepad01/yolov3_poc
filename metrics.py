@@ -91,6 +91,7 @@ def yolov3_loss_perscale(output, obj_mask, ignored_mask, target_mask, anchors, g
     # B x S x S x A x GT
 
     max_pred_gt_iou = tf.reduce_max(pred_gt_iou, axis=4)
+    max_pred_gt_iou = tf.expand_dims(max_pred_gt_iou, axis=-1)
     dyn_ignored = max_pred_gt_iou > IGNORED_IOU_THRESHOLD
 
     ignored_final_mask = tf.cast(ignored_mask, tf.bool)
