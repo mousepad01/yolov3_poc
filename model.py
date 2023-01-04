@@ -9,7 +9,7 @@ from checkpoint_scheds import *
 from lr_scheds import *
 from constants import *
 from metrics import *
-from predictions import *
+from stats_manager import *
 from data_processing import *
 
 class Network:
@@ -50,6 +50,13 @@ class Network:
         self.cache_manager = NetworkCacheManager(self, self.data_loader.cache_manager.cache_key, cache_idx)
         '''
             the cache manager
+        '''
+
+        self.stats_manager = StatsManager(self.data_loader.onehot_to_name, \
+                                            iou_thrs=[thr / 100 for thr in range(0, 100, 5)], \
+                                            confidence_thrs=[thr / 100 for thr in range(0, 100, 5)])
+        '''
+            it is responsible for prediction rendering and model stats other than the loss (mAP, PR curve)
         '''
         
         self.encoder: tf.keras.Model = None
@@ -151,7 +158,7 @@ class Network:
 
         self._status = Network.UNTRAINED
 
-    def plot_stats(self, show_on_screen=False, save_image=True):
+    def plot_train_stats(self, show_on_screen=False, save_image=True):
         '''
             loads AND shows the train statistics under the cache_key, cache_idx entry
             * show_on_screen: if True, show on screen
@@ -161,7 +168,7 @@ class Network:
         train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj, \
         train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh, \
         validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj, \
-        validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh = self.cache_manager.get_stats()
+        validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh = self.cache_manager.get_train_stats()
 
         _, ax = plt.subplots(3, 2)
 
@@ -214,7 +221,7 @@ class Network:
         ax[2][1].legend()
 
         if save_image:
-            self.cache_manager.store_stats_fig()
+            self.cache_manager.store_train_stats_fig()
 
         if show_on_screen:
             plt.show()
@@ -433,7 +440,7 @@ class Network:
         train_loss_stats, train_loss_stats_noobj, train_loss_stats_obj, \
         train_loss_stats_cl, train_loss_stats_xy, train_loss_stats_wh, \
         validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj, \
-        validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh = self.cache_manager.get_stats()
+        validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh = self.cache_manager.get_train_stats()
 
         def _to_output_t(x): 
             return floor((x / TRAIN_IMG_CNT) * (10 ** LOSS_OUTPUT_PRECISION)) / (10 ** LOSS_OUTPUT_PRECISION)
@@ -603,7 +610,7 @@ class Network:
                             validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj,
                             validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh]
 
-                    self.cache_manager.store_stats(stats)
+                    self.cache_manager.store_train_stats(stats)
 
                 else:
                     tf.print(f"\nTraining stopped at epoch {epoch} - no checkpoint occured.")
@@ -622,7 +629,7 @@ class Network:
                             validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj,
                             validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh]
 
-                self.cache_manager.store_stats(stats)
+                self.cache_manager.store_train_stats(stats)
 
                 if copy_at_checkpoint:
                     vloss = _to_output_v(val_loss)
@@ -642,7 +649,7 @@ class Network:
                     validation_loss_stats, validation_loss_stats_noobj, validation_loss_stats_obj,
                     validation_loss_stats_cl, validation_loss_stats_xy, validation_loss_stats_wh]
 
-            self.cache_manager.store_stats(stats)
+            self.cache_manager.store_train_stats(stats)
 
     def show_architecture_stats(self):
         
@@ -663,31 +670,43 @@ class Network:
         elif self._status is Network.TRAINING_DETECTION:
             tf.print(f"Full network has been trained (for detection) {self.next_train_epoch} epochs.")
 
-    def predict(self, threshold=0.6, subset="validation", nms_threshold=0.6):
+    def predict(self, subset="validation", obj_threshold=0.6, nms_threshold=0.6):
         
         if self._status < Network.TRAINING_DETECTION:
             tf.print("Network not yet initialized")
             return
 
+        anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (self.data_loader.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
+
         for (img, _, _, _, _, _, _, _, _, _, _) in self.data_loader.load_data(1, subset):
 
-            out_scale1, out_scale2, out_scale3 = self.full_network(img, training=False)
+            output = self.full_network(img, training=False)
+            pred_xy_min, pred_xy_max, pred_class, pred_class_p = self.stats_manager.parse_prediction(output, anchors_relative, obj_threshold, nms_threshold)
 
-            anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (self.data_loader.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
-        
-            output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, anchors_relative[0], threshold)
-            output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, anchors_relative[1], threshold)
-            output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = make_prediction_perscale(out_scale3, anchors_relative[2], threshold)
+            self.stats_manager.show_prediction(np.array(((img[0] + 1.0) / 2.0) * 255.0, dtype=np.uint8), \
+                                                pred_xy_min[0], pred_xy_max[0], pred_class[0], pred_class_p[0])
 
-            output_xy_min = [output_xy_min_scale0, output_xy_min_scale1, output_xy_min_scale2]
-            output_xy_max = [output_xy_max_scale0, output_xy_max_scale1, output_xy_max_scale2]
-            output_class = [output_class_scale0, output_class_scale1, output_class_scale2]
-            output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
+    def compute_precision_recall_stats(self, subset="validation", nms_threshold=0.6):
 
-            show_prediction(np.array(((img[0] + 1.0) / 2.0) * 255.0, dtype=np.uint8), \
-                            output_xy_min, output_xy_max, output_class, output_class_maxp, \
-                            self.data_loader.onehot_to_name, \
-                            nms_threshold=nms_threshold)
+        if self._status < Network.TRAINING_DETECTION:
+            tf.print("Network not yet initialized")
+            return
+
+        def _get_keys():
+            ks = list(self.data_loader.imgs[subset].keys())
+            yield from ks
+
+        anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (self.data_loader.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
+
+        ks = _get_keys()
+
+        for (img, _, _, _, _, _, _, _, _, _, _) in self.data_loader.load_data(1, subset, shuffle=False):
+
+            k = next(ks)
+            output = self.full_network(img, training=False)
+
+            for bbox_d in self.data_loader.imgs[subset][k]["objs"]:
+                self.stats_manager.update_tp_fp_fn(output, bbox_d, anchors_relative, nms_threshold)
 
 class NetworkCacheManager:
 
@@ -888,7 +907,7 @@ class NetworkCacheManager:
 
             tf.print(f"Model with key {self.cache_key} (idx {self.cache_idx}) has been saved.")
 
-    def get_stats(self):
+    def get_train_stats(self):
         '''
             loads the train statistics under the cache_key, cache_idx entry
         '''
@@ -938,7 +957,7 @@ class NetworkCacheManager:
         except FileNotFoundError:
             return [[] for _ in range(4)]
 
-    def store_stats(self, stats):
+    def store_train_stats(self, stats):
         '''
             saves the train statistics under the cache_key, cache_idx entry
         '''
@@ -974,7 +993,7 @@ class NetworkCacheManager:
             stats = pickle.dumps(stats)
             stats_f.write(stats)
 
-    def store_stats_fig(self):
+    def store_train_stats_fig(self):
 
         if self.cache_key is not None:
             cache_key = self.cache_key

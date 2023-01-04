@@ -133,14 +133,16 @@ class DataLoader:
     def get_class_cnt(self):
         return len(self.category_onehot_to_id)
 
-    def load_data(self, batch_size, purpose):
+    def load_data(self, batch_size, purpose, shuffle=True):
         '''
             * images get loaded on GPU at the cast when yielding
             * gt gets loaded on GPU at ???
         '''
 
         keys = list(self.imgs[purpose].keys())
-        random.shuffle(keys)
+
+        if shuffle:
+            random.shuffle(keys)
 
         #yield keys
 

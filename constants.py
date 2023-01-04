@@ -89,7 +89,7 @@ COMPRESS_DATA_CACHE = True
 '''
 
 '''
-    ############################################ MODEL CONSTANTS AND OUTPUT ############################################
+    ############################################ MODEL CONSTANTS ############################################
 '''
 
 IMG_SIZE = (416, 416)
@@ -126,6 +126,10 @@ ANCHOR_PERSCALE_CNT = 3
 IGNORED_IOU_THRESHOLD = 0.5
 '''
     min IOU for non-assigned anchors or predictions, for them to be completely ignored in loss function
+'''
+
+'''
+    ############################################ OUTPUT ############################################
 '''
 
 CLASS_TO_COLOR = [(255, 0, 0), (0, 0, 255), (0, 255, 0), (0, 0, 0), (255, 0, 255), (255, 255, 0), (0, 255, 255), (165, 42, 42), (255, 140, 0), (255, 255, 255)] * 10

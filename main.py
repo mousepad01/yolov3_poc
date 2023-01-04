@@ -64,7 +64,7 @@ def main():
                     print(img_id)
                     cnt_ += 1
 
-                    output_perimg = [make_prediction_perscale(output_from_mask[d][cnt_ - 1: cnt_], anchors_relative[d], 0.6) for d in range(SCALE_CNT)]
+                    output_perimg = [parse_prediction_perscale(output_from_mask[d][cnt_ - 1: cnt_], anchors_relative[d], 0.6) for d in range(SCALE_CNT)]
                     show_prediction(img, [output_perimg[d][0] for d in range(SCALE_CNT)],
                                             [output_perimg[d][1] for d in range(SCALE_CNT)],
                                             [output_perimg[d][2] for d in range(SCALE_CNT)],
@@ -176,9 +176,9 @@ def main():
 
                 anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_loader.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
             
-                output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = make_prediction_perscale(out_scale1, anchors_relative[0], 0.6)
-                output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = make_prediction_perscale(out_scale2, anchors_relative[1], 0.6)
-                output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = make_prediction_perscale(out_scale3, anchors_relative[2], 0.6)
+                output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = parse_prediction_perscale(out_scale1, anchors_relative[0], 0.6)
+                output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = parse_prediction_perscale(out_scale2, anchors_relative[1], 0.6)
+                output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = parse_prediction_perscale(out_scale3, anchors_relative[2], 0.6)
 
                 output_xy_min = [output_xy_min_scale0, output_xy_min_scale1, output_xy_min_scale2]
                 output_xy_max = [output_xy_max_scale0, output_xy_max_scale1, output_xy_max_scale2]
@@ -299,7 +299,7 @@ def main():
         data_loader = DataLoader(cache_key="all")
         model = Network(data_loader, cache_idx="test_adam_5e-5")
         #model.plot_pretrain_stats(show_on_screen=True, save_image=False)
-        model.plot_stats(show_on_screen=True, save_image=False)
+        model.plot_train_stats(show_on_screen=True, save_image=False)
 
     def _test_model():
 
@@ -319,8 +319,8 @@ def main():
     #_test_pretrain_baseline()
     #_run_training_detonly()
     #_run_training()
-    #_show_stats()
-    _test_model()
+    _show_stats()
+    #_test_model()
     
 if __name__ == "__main__":
     main()
