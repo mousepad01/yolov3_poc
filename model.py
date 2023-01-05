@@ -52,9 +52,7 @@ class Network:
             the cache manager
         '''
 
-        self.stats_manager = StatsManager(self.data_loader.onehot_to_name, \
-                                            iou_thrs=[thr / 100 for thr in range(0, 100, 5)], \
-                                            confidence_thrs=[thr / 100 for thr in range(0, 100, 5)])
+        self.stats_manager = self.cache_manager.get_stats_manager()
         '''
             it is responsible for prediction rendering and model stats other than the loss (mAP, PR curve)
         '''
@@ -684,7 +682,7 @@ class Network:
             pred_xy_min, pred_xy_max, pred_class, pred_class_p = self.stats_manager.parse_prediction(output, anchors_relative, obj_threshold, nms_threshold)
 
             self.stats_manager.show_prediction(np.array(((img[0] + 1.0) / 2.0) * 255.0, dtype=np.uint8), \
-                                                pred_xy_min[0], pred_xy_max[0], pred_class[0], pred_class_p[0])
+                                                pred_xy_min, pred_xy_max, pred_class, pred_class_p)
 
     def compute_precision_recall_stats(self, subset="validation", nms_threshold=0.6):
 
@@ -700,6 +698,8 @@ class Network:
 
         ks = _get_keys()
 
+        cnt_ = 0
+
         for (img, _, _, _, _, _, _, _, _, _, _) in self.data_loader.load_data(1, subset, shuffle=False):
 
             k = next(ks)
@@ -707,6 +707,14 @@ class Network:
 
             for bbox_d in self.data_loader.imgs[subset][k]["objs"]:
                 self.stats_manager.update_tp_fp_fn(output, bbox_d, anchors_relative, nms_threshold)
+
+        self.cache_manager.store_stats_manager()
+
+    def get_ap(self, threshold):
+        return self.stats_manager.get_ap(threshold)
+
+    def get_mean_ap(self):
+        return self.stats_manager.get_mean_ap()
 
 class NetworkCacheManager:
 
@@ -794,6 +802,17 @@ class NetworkCacheManager:
 
             with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{self.cache_idx}_pretrain_stats", "rb") as stats_f:
                 with open(f"{TRAIN_STATS_PATH}{self.cache_key}_{new_cache_idx}_pretrain_stats", "wb+") as stats_f_:
+
+                    stats = stats_f.read()
+                    stats_f_.write(stats)
+
+        except FileNotFoundError:
+            pass
+
+        try:
+
+            with open(f"{VALIDATION_STATS_PATH}{self.cache_key}_{self.cache_idx}_stats_manager", "rb") as stats_f:
+                with open(f"{VALIDATION_STATS_PATH}{self.cache_key}_{new_cache_idx}_stats_manager", "wb+") as stats_f_:
 
                     stats = stats_f.read()
                     stats_f_.write(stats)
@@ -1016,3 +1035,26 @@ class NetworkCacheManager:
             cache_idx = TMP_CACHE_KEY
 
         plt.savefig(f"{TRAIN_STATS_PATH}{cache_key}_{cache_idx}_pretrain_stats_plot")
+
+    def get_stats_manager(self):
+
+        try:
+
+            with open(f"{VALIDATION_STATS_PATH}{self.cache_key}_{self.cache_idx}_stats_manager", "rb") as stats_f:
+                stats_manager = pickle.loads(stats_f.read())
+            
+            return stats_manager
+
+        except FileNotFoundError:
+            return StatsManager(self.network.data_loader.onehot_to_name, \
+                                iou_thresholds=[thr / 100 for thr in range(0, 100, 5)], \
+                                confidence_thresholds=[thr / 100 for thr in range(10, 100, 5)])
+
+    def store_stats_manager(self):
+
+        if self.cache_key is not None:
+        
+            with open(f"{VALIDATION_STATS_PATH}{self.cache_key}_{self.cache_idx}_stats_manager", "wb+") as stats_f:
+                stats_manager = pickle.dumps(self.network.cache_manager)
+                stats_f.write(stats_manager)
+                

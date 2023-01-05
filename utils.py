@@ -56,28 +56,31 @@ def non_maximum_supression(pred_xy_min, pred_xy_max, pred_class, pred_class_p, i
     predictions = [(pred_xy_min[d][idx], pred_xy_max[d][idx], pred_class[d][idx], pred_class_p[d][idx]) for d in range(SCALE_CNT) for idx in range(pred_xy_min[d].shape[0])]
     predictions.sort(key=lambda x: x[3], reverse=True)
 
+    ok = [True for _ in range(len(predictions))]
+
+    for idx in range(len(predictions)):
+
+        if ok[idx] is True:
+
+            for idx_ in range(idx + 1, len(predictions)):
+                if ok[idx_] is True:
+                
+                    if iou(predictions[idx][0], predictions[idx][1], predictions[idx_][0], predictions[idx_][1]) >= iou_threshold:
+                        ok[idx_] = False
+
     nms_xy_min = []
     nms_xy_max = []
     nms_class = []
     nms_class_p = []
 
-    while len(predictions) > 0:
+    for idx in range(len(predictions)):
 
-        best_pred = predictions.pop(0)
+        if ok[idx] is True:
 
-        idx = 0
-        while idx < len(predictions):
-            
-            if iou(best_pred[0], best_pred[1], predictions[idx][0], predictions[idx][1]) >= iou_threshold:
-                predictions.pop(idx)
-
-            else:
-                idx += 1
-
-        nms_xy_min.append(best_pred[0])
-        nms_xy_max.append(best_pred[1])
-        nms_class.append(best_pred[2])
-        nms_class_p.append(best_pred[3])
+            nms_xy_min.append(predictions[idx][0])
+            nms_xy_max.append(predictions[idx][1])
+            nms_class.append(predictions[idx][2])
+            nms_class_p.append(predictions[idx][3])
 
     nms_xy_min = tf.convert_to_tensor(nms_xy_min)
     nms_xy_max = tf.convert_to_tensor(nms_xy_max)

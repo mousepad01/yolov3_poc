@@ -42,6 +42,11 @@ TRAIN_STATS_PATH = "./train_stats/"
     (relative) path for storing train statistics
 '''
 
+VALIDATION_STATS_PATH = "./validation_stats/"
+'''
+    (relative) path for storing validation statistics
+'''
+
 TMP_CACHE_KEY = "tmp"
 '''
     key for temporary cache, if needed

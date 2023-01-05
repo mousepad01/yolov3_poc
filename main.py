@@ -311,6 +311,27 @@ def main():
 
         model.predict(subset="validation")
 
+    def _find_ap():
+
+        EPOCHS = 160
+        P_EPOCHS = 10
+
+        lrs = {e: 5e-5 for e in range(EPOCHS)}
+        lr_sched = Lr_dict_sched(lrs)
+
+        p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
+        p_lr_sched = Lr_dict_sched(p_lrs)
+
+        ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
+
+        data_loader = DataLoader(cache_key="all")
+        data_loader.prepare()
+
+        model = Network(data_loader, cache_idx="test_adam_5e-5")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9))
+
+        model.compute_precision_recall_stats()
+
     #_test_mask_encoding()
     #_test_loss()
     #_test_boxes()
@@ -319,8 +340,9 @@ def main():
     #_test_pretrain_baseline()
     #_run_training_detonly()
     #_run_training()
-    _show_stats()
+    #_show_stats()
     #_test_model()
-    
+    _find_ap()
+
 if __name__ == "__main__":
     main()

@@ -146,7 +146,7 @@ class StatsManager:
 
     def parse_prediction(self, output, anchors, obj_threshold=0.6, nms_threshold=0.6):
         '''
-            output: (list of SCALE_CNT=3) B x S x S x (A * (C + 5))
+            output: (list of SCALE_CNT=3) 1 x S x S x (A * (C + 5))
             anchors: (list of SCALE_CNT=3) A x 2  --- RELATIVE TO GRID CELL COUNT FOR CURRENT SCALE !!!!
 
             returns (absolute) coordinate predictions, class predictions and objectness predictions:
@@ -170,13 +170,6 @@ class StatsManager:
             output_xy_min[d] = output_xy_min[d] * IMG_SIZE[0]
             output_xy_max[d] = output_xy_max[d] * IMG_SIZE[0]
 
-            batch_cnt = output_xy_min[d].shape[0]
-            
-            output_xy_min[d] = tf.reshape(output_xy_min[d], (batch_cnt, -1, 2))
-            output_xy_max[d] = tf.reshape(output_xy_max[d], (batch_cnt, -1, 2))
-            output_class[d] = tf.reshape(output_class[d], (batch_cnt, -1))
-            output_class_maxp[d] = tf.reshape(output_class_maxp[d], (batch_cnt, -1))
-
         pred_xy_min, pred_xy_max, pred_class, pred_class_p = non_maximum_supression(output_xy_min, output_xy_max, output_class, output_class_maxp, nms_threshold)
         return pred_xy_min, pred_xy_max, pred_class, pred_class_p
 
@@ -191,8 +184,8 @@ class StatsManager:
 
         xmin, ymin, xmax, ymax = x, y, x + w, y + h
 
-        gt_xy_min.append(tf.convert_to_tensor([xmin, ymin]))
-        gt_xy_max.append(tf.convert_to_tensor([xmax, ymax]))
+        gt_xy_min.append(tf.convert_to_tensor([xmin, ymin], dtype=tf.float32))
+        gt_xy_max.append(tf.convert_to_tensor([xmax, ymax], dtype=tf.float32))
         gt_class.append(cl)
 
         for obj_thr in self._obj_thrs:
@@ -234,12 +227,12 @@ class StatsManager:
                 # true positives + false positives
 
                 for pred_idx in range(pred_cnt):
-                    self.pr_dict[pred_class[pred_idx]][iou_thr][obj_thr]["tp_fp"] += 1
+                    self.pr_dict[int(pred_class[pred_idx])][iou_thr][obj_thr]["tp_fp"] += 1
 
                 # true positives + false negatives
 
                 for gt_idx in range(gt_cnt):
-                    self.pr_dict[gt_class[gt_idx]][iou_thr][obj_thr]["tp_fn"] += 1
+                    self.pr_dict[int(gt_class[gt_idx])][iou_thr][obj_thr]["tp_fn"] += 1
 
     def get_ap(self, iou_threshold):
         '''
@@ -293,7 +286,7 @@ class StatsManager:
 
         return ap_over_cls
 
-    def compute_mean_ap(self):
+    def get_mean_ap(self):
         '''
             get mAP (AP averaged over all IOU thresholds)
         '''
