@@ -1,3 +1,4 @@
+import numpy as np
 
 '''
     Various constants needed in whatever places
@@ -93,6 +94,11 @@ COMPRESS_DATA_CACHE = True
     * whether to store image cache as jpg or bitmap in rap
 '''
 
+AUGMENT_DATA_PROBABILITY = 0.5
+'''
+    data augmentation probability
+'''
+
 '''
     ############################################ MODEL CONSTANTS ############################################
 '''
@@ -147,4 +153,19 @@ for idx, rgb in enumerate(CLASS_TO_COLOR):
 LOSS_OUTPUT_PRECISION = 4
 '''
     how many decimals for loss output - does not influence in any way the model
+'''
+
+'''
+    ############################################ RANDOMNESS ############################################
+'''
+
+NOISE_MASK_POOL_LEN = 1000
+'''
+    how many noise masks for image augmentation to precompute
+'''
+
+#FIXME
+NOISE_MASK_POOL = [np.random.uniform(-20, 20, (IMG_SIZE[0], IMG_SIZE[1], 3)) for _ in range(NOISE_MASK_POOL_LEN)]
+'''
+    precomputed noise masks for image augmentation
 '''

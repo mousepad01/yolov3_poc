@@ -133,10 +133,51 @@ class DataLoader:
     def get_class_cnt(self):
         return len(self.category_onehot_to_id)
 
+    def augment_data(self, image, ground_truth):
+
+        def _blur_contrast(img):
+
+            contrast = 1 + ((random.random() * 2 - 1) / 5)
+
+            img = cv.blur(img, (2, 2))
+            img = np.ndarray.astype(np.clip(img * contrast, 0, 255), np.uint8)
+
+            return img
+
+        def _noise_contrast(img):
+
+            noise_mask = NOISE_MASK_POOL[np.random.randint(0, NOISE_MASK_POOL_LEN - 1)]
+            contrast = 1 + ((random.random() * 2 - 1) / 5)
+
+            img = np.ndarray.astype(np.clip(img * contrast + noise_mask, 0, 255), np.uint8)
+
+            return img
+
+        # FIXME
+        def _flip_leftright(img, gt):
+
+            img = cv.flip(img, 1)
+
+            #gt = tf.reverse(gt, )
+
+            return img, gt
+
+        '''a = random.random()
+
+        if a < 0.5:
+            image, ground_truth = _flip_leftright(image, ground_truth)'''
+
+        a = random.random()
+
+        if a < 0.5:
+            return tf.convert_to_tensor(_blur_contrast(np.array(image))), ground_truth
+        else:
+            return tf.convert_to_tensor(_noise_contrast(np.array(image))), ground_truth
+
     def load_data(self, batch_size, purpose, shuffle=True):
         '''
             * images get loaded on GPU at the cast when yielding
-            * gt gets loaded on GPU at ???
+            * gt gets loaded on GPU at also when loading ???
         '''
 
         keys = list(self.imgs[purpose].keys())
@@ -144,6 +185,7 @@ class DataLoader:
         if shuffle:
             random.shuffle(keys)
 
+        # FIXME
         #yield keys
 
         current_img_loaded = []
@@ -154,9 +196,22 @@ class DataLoader:
 
         for k in keys:
 
-            current_img_loaded.append(self.cache_manager.get_img(k, purpose))
-
+            loaded_img = self.cache_manager.get_img(k, purpose)
             gt = self.cache_manager.get_gt(k)
+
+            #tf.print(loaded_img.dtype)
+            #tf.print(loaded_img.device)
+
+            if random.random() < AUGMENT_DATA_PROBABILITY:
+                loaded_img, gt = self.augment_data(loaded_img, gt)
+
+            #tf.print(loaded_img.dtype)
+            #tf.print(loaded_img.device)
+
+            #quit()
+
+            current_img_loaded.append(loaded_img)
+
             for d in range(SCALE_CNT):
 
                 current_om_loaded[d].append(gt[0][d])

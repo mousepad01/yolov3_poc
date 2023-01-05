@@ -15,8 +15,12 @@ def main():
 
     def _test_mask_encoding():
 
+        tf.print("BEFORE START: change dataloader to first YIELD THE KEYS")
+
         data_loader = DataLoader(cache_key="all")
         data_loader.prepare()
+
+        stats_manager = StatsManager(data_loader.onehot_to_name, iou_thresholds=[], confidence_thresholds=[])
 
         CLS_CNT = data_loader.get_class_cnt()
         BSIZE = 4
@@ -33,7 +37,8 @@ def main():
 
             for (imgs, obj_mask_size1, ignored_mask_size1, target_mask_size1, \
                         obj_mask_size2, ignored_mask_size2, target_mask_size2, \
-                        obj_mask_size3, ignored_mask_size3, target_mask_size3) in dl:
+                        obj_mask_size3, ignored_mask_size3, target_mask_size3, \
+                        gt_boxes) in dl:
 
                 img_keys_ = []
                 for _ in range(imgs.shape[0]):
@@ -59,19 +64,15 @@ def main():
                 cnt_ = 0
                 for img_id in img_keys_:
 
-                    img = tf.cast(tf.floor(((imgs[cnt_] + 1.0) / 2.0) * 255.0), tf.uint8)
+                    img = np.array(tf.cast(tf.floor(((imgs[cnt_] + 1.0) / 2.0) * 255.0), tf.uint8))
                     
                     print(img_id)
                     cnt_ += 1
 
-                    output_perimg = [parse_prediction_perscale(output_from_mask[d][cnt_ - 1: cnt_], anchors_relative[d], 0.6) for d in range(SCALE_CNT)]
-                    show_prediction(img, [output_perimg[d][0] for d in range(SCALE_CNT)],
-                                            [output_perimg[d][1] for d in range(SCALE_CNT)],
-                                            [output_perimg[d][2] for d in range(SCALE_CNT)],
-                                            [output_perimg[d][3] for d in range(SCALE_CNT)],
-                                            
-                                    data_loader.onehot_to_name,
-                                    data_loader.imgs["train"][img_id]["objs"])
+                    output = [output_from_mask[d][cnt_ - 1: cnt_] for d in range(SCALE_CNT)]
+                    pred_xy_min, pred_xy_max, pred_class, pred_class_p = stats_manager.parse_prediction(output, anchors_relative, 0.95, 100000)
+
+                    stats_manager.show_prediction(img, pred_xy_min, pred_xy_max, pred_class, pred_class_p, data_loader.imgs["train"][img_id]["objs"])
 
     def _test_loss():
 
@@ -134,60 +135,6 @@ def main():
                 #img = np.array(imgs[idx])
                 cv.imshow(data_loader.onehot_to_name[int(tf.argmax(gt[idx]))], img)
                 cv.waitKey(0)
-
-    def _test_learning_few_img():
-
-        FEW = 1
-
-        data_loader = DataLoader(cache_key="all")
-        data_loader.prepare()
-
-        def _lr_sched(epoch, lr):
-
-            if epoch < 800:
-                return 1e-4
-
-            elif epoch < 1600:
-                return 1e-5
-
-            else:
-                return 1e-6
-
-        model = Network(data_loader, cache_idx="overfit1")
-        model.build_components(backbone="small", optimizer=tf.optimizers.Adam(learning_rate=1e-4), lr_scheduler=_lr_sched,
-                                pretrain_optimizer=tf.keras.optimizers.SGD(1e-3, 0.9))
-        
-        model.train(1700, FEW)
-
-        for (img, obj_mask_size1, ignored_mask_size1, target_mask_size1, \
-                    obj_mask_size2, ignored_mask_size2, target_mask_size2, \
-                    obj_mask_size3, ignored_mask_size3, target_mask_size3) in data_loader.load_data(FEW, "train"):
-
-            for idx in range(img.shape[0]):
-
-                out_scale1, out_scale2, out_scale3 = model.full_network(img[idx: idx + 1])
-
-                loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale1, obj_mask_size1[idx: idx + 1], ignored_mask_size1[idx: idx + 1], target_mask_size1[idx: idx + 1])
-                print(loss_value, noobj, obj, cl, xy, wh)
-                loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale2, obj_mask_size2[idx: idx + 1], ignored_mask_size2[idx: idx + 1], target_mask_size2[idx: idx + 1])
-                print(loss_value, noobj, obj, cl, xy, wh)
-                loss_value, noobj, obj, cl, xy, wh = yolov3_loss_perscale(out_scale3, obj_mask_size3[idx: idx + 1], ignored_mask_size3[idx: idx + 1], target_mask_size3[idx: idx + 1])
-                print(loss_value, noobj, obj, cl, xy, wh)
-
-                anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (data_loader.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
-            
-                output_xy_min_scale0, output_xy_max_scale0, output_class_scale0, output_class_maxp_scale0 = parse_prediction_perscale(out_scale1, anchors_relative[0], 0.6)
-                output_xy_min_scale1, output_xy_max_scale1, output_class_scale1, output_class_maxp_scale1 = parse_prediction_perscale(out_scale2, anchors_relative[1], 0.6)
-                output_xy_min_scale2, output_xy_max_scale2, output_class_scale2, output_class_maxp_scale2 = parse_prediction_perscale(out_scale3, anchors_relative[2], 0.6)
-
-                output_xy_min = [output_xy_min_scale0, output_xy_min_scale1, output_xy_min_scale2]
-                output_xy_max = [output_xy_max_scale0, output_xy_max_scale1, output_xy_max_scale2]
-                output_class = [output_class_scale0, output_class_scale1, output_class_scale2]
-                output_class_maxp = [output_class_maxp_scale0, output_class_maxp_scale1, output_class_maxp_scale2]
-
-                show_prediction(np.array(img[idx]), output_xy_min, output_xy_max, output_class, output_class_maxp, data_loader.onehot_to_name)
-
-            break
 
     def _test_pretrain_baseline():
 
@@ -332,7 +279,7 @@ def main():
 
         model.compute_precision_recall_stats()
 
-    #_test_mask_encoding()
+    _test_mask_encoding()
     #_test_loss()
     #_test_boxes()
     #_test_for_nan_inf()
@@ -342,7 +289,7 @@ def main():
     #_run_training()
     #_show_stats()
     #_test_model()
-    _find_ap()
+    #_find_ap()
 
 if __name__ == "__main__":
     main()
