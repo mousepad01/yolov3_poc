@@ -69,6 +69,19 @@ def main():
                     print(img_id)
                     cnt_ += 1
 
+                    gt_boxes_ = tf.reshape(gt_boxes[cnt_ - 1: cnt_], (-1, 4))
+
+                    for bb_idx in range(gt_boxes_.shape[0]):
+
+                        gt_b = gt_boxes_[bb_idx]
+                        if not (gt_b[0] == 0 and gt_b[1] == 0 and gt_b[2] == 0 and gt_b[3] == 0):
+                            
+                            xmin = int(gt_b[0] * IMG_SIZE[0] * SHOW_RESIZE_FACTOR)
+                            ymin = int(gt_b[1] * IMG_SIZE[0] * SHOW_RESIZE_FACTOR)
+                            xmax = int(gt_b[2] * IMG_SIZE[0] * SHOW_RESIZE_FACTOR)
+                            ymax = int(gt_b[3] * IMG_SIZE[0] * SHOW_RESIZE_FACTOR)
+                            print(f"gt box {(ymin, xmin)}, {(ymax, xmax)}")
+
                     output = [output_from_mask[d][cnt_ - 1: cnt_] for d in range(SCALE_CNT)]
                     pred_xy_min, pred_xy_max, pred_class, pred_class_p = stats_manager.parse_prediction(output, anchors_relative, 0.95, 100000)
 
@@ -244,7 +257,7 @@ def main():
     def _show_stats():
 
         data_loader = DataLoader(cache_key="all")
-        model = Network(data_loader, cache_idx="test_adam_5e-5")
+        model = Network(data_loader, cache_idx="test_adam_5e-5_aug")
         #model.plot_pretrain_stats(show_on_screen=True, save_image=False)
         model.plot_train_stats(show_on_screen=True, save_image=False)
 

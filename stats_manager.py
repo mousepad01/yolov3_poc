@@ -96,7 +96,6 @@ class StatsManager:
             (optional) ground truth info: [{"category": one hot idx, "bbox": (x, y, w, h) absolute}, ...]
         '''
 
-        SHOW_RESIZE_FACTOR = 2.3
         image =  cv.resize(image, (int(IMG_SIZE[0] * SHOW_RESIZE_FACTOR), int(IMG_SIZE[1] * SHOW_RESIZE_FACTOR)))
 
         # if there is ground truth, first show it

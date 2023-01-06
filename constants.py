@@ -94,7 +94,7 @@ COMPRESS_DATA_CACHE = True
     * whether to store image cache as jpg or bitmap in rap
 '''
 
-AUGMENT_DATA_PROBABILITY = 0.5
+AUGMENT_DATA_PROBABILITY = 0.7
 '''
     data augmentation probability
 '''
@@ -153,6 +153,11 @@ for idx, rgb in enumerate(CLASS_TO_COLOR):
 LOSS_OUTPUT_PRECISION = 4
 '''
     how many decimals for loss output - does not influence in any way the model
+'''
+
+SHOW_RESIZE_FACTOR = 2.3
+'''
+    resize factor for showing images (compared to IMG_SIZE)
 '''
 
 '''

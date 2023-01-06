@@ -153,26 +153,56 @@ class DataLoader:
 
             return img
 
-        # FIXME
         def _flip_leftright(img, gt):
+
+            '''
+                gt: (3x obj mask, 3x ig mask, 3x target mask, gt masks)
+            '''
 
             img = cv.flip(img, 1)
 
-            #gt = tf.reverse(gt, )
+            obj_m = gt[0]
+            ign_m = gt[1]
+            tar_m = gt[2]
+            for d in range(SCALE_CNT):
 
-            return img, gt
+                obj_m[d] = tf.reverse(obj_m[d], axis=[1])
+                ign_m[d] = tf.reverse(ign_m[d], axis=[1])
+                tar_m[d] = tf.reverse(tar_m[d], axis=[1])
+            
+            for d in range(SCALE_CNT):
 
-        '''a = random.random()
+                reversed_cell_y_offset = 1 - tf.sigmoid(tar_m[d][..., 1:2])
+                reversed_ty = tf.math.log(reversed_cell_y_offset / (1 - reversed_cell_y_offset))
 
-        if a < 0.5:
-            image, ground_truth = _flip_leftright(image, ground_truth)'''
+                tar_m[d] = tf.concat([tar_m[d][..., 0:1], reversed_ty, tar_m[d][..., 2:]], axis=-1)
+
+            gt_boxes = gt[3]
+
+            reversed_ymin = 1 - gt_boxes[..., 1:2]
+            reversed_ymax = 1 - gt_boxes[..., 3:4]
+
+            gt_boxes = tf.concat([gt_boxes[..., 0:1], reversed_ymax, gt_boxes[..., 2:3], reversed_ymin], axis=-1)
+
+            gt_boxes_usedslots = tf.expand_dims(tf.cast(tf.reduce_sum(gt[3], axis=-1) > 0, tf.float32), axis=1)
+            gt_boxes *= gt_boxes_usedslots
+
+            return img, (obj_m, ign_m, tar_m, gt_boxes)
+
+        image = np.array(image)
+
+        a = random.random()
+
+        # FIXME
+        if a < 1:
+            image, ground_truth = _flip_leftright(image, ground_truth)
 
         a = random.random()
 
         if a < 0.5:
-            return tf.convert_to_tensor(_blur_contrast(np.array(image))), ground_truth
+            return tf.convert_to_tensor(_blur_contrast(image)), ground_truth
         else:
-            return tf.convert_to_tensor(_noise_contrast(np.array(image))), ground_truth
+            return tf.convert_to_tensor(_noise_contrast(image)), ground_truth
 
     def load_data(self, batch_size, purpose, shuffle=True):
         '''
@@ -186,7 +216,7 @@ class DataLoader:
             random.shuffle(keys)
 
         # FIXME
-        #yield keys
+        yield keys
 
         current_img_loaded = []
         current_om_loaded = [[] for _ in range(SCALE_CNT)]
@@ -199,16 +229,8 @@ class DataLoader:
             loaded_img = self.cache_manager.get_img(k, purpose)
             gt = self.cache_manager.get_gt(k)
 
-            #tf.print(loaded_img.dtype)
-            #tf.print(loaded_img.device)
-
             if random.random() < AUGMENT_DATA_PROBABILITY:
                 loaded_img, gt = self.augment_data(loaded_img, gt)
-
-            #tf.print(loaded_img.dtype)
-            #tf.print(loaded_img.device)
-
-            #quit()
 
             current_img_loaded.append(loaded_img)
 
