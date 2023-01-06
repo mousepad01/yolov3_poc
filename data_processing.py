@@ -193,8 +193,7 @@ class DataLoader:
 
         a = random.random()
 
-        # FIXME
-        if a < 1:
+        if a < 0.5:
             image, ground_truth = _flip_leftright(image, ground_truth)
 
         a = random.random()
@@ -216,7 +215,7 @@ class DataLoader:
             random.shuffle(keys)
 
         # FIXME
-        yield keys
+        #yield keys
 
         current_img_loaded = []
         current_om_loaded = [[] for _ in range(SCALE_CNT)]
@@ -276,87 +275,38 @@ class DataLoader:
                     tf.convert_to_tensor(current_tm_loaded[2]), \
                     tf.reshape(tf.convert_to_tensor(current_gtboxes_loaded), (len(current_img_loaded), 1, 1, 1, -1, 4))
 
-    def load_boxes(self, purpose):
+    def load_pretrain_data(self, batch_size, purpose, shuffle=True):
+
+        CLASS_CNT = self.get_class_cnt()
+
+        keys = list(self.imgs[purpose].keys())
+
+        if shuffle:
+            random.shuffle(keys)
         
         current_loaded = []
-        for img_id, img_d in self.imgs[purpose].items():
+        current_gt_loaded = []
+
+        for img_id in keys:
+            img_d = self.imgs[purpose][img_id]
+
             for bbox_d in img_d["objs"]:
 
                 current_loaded.append(self.cache_manager.get_box(img_id, bbox_d["bbox"], purpose))
+                current_gt_loaded.append(tf.one_hot(bbox_d["category"], CLASS_CNT))
 
-                if len(current_loaded) == PRETRAIN_DATA_LOAD_BATCH_SIZE:
+                if len(current_loaded) == batch_size:
 
-                    current_loaded = tf.convert_to_tensor(current_loaded)
-                    yield current_loaded
+                    yield (tf.convert_to_tensor(current_loaded, tf.float32) / 255.0) * 2.0 - 1.0, \
+                            tf.convert_to_tensor(current_gt_loaded)
 
                     current_loaded = []
+                    current_gt_loaded = []
 
         if len(current_loaded) > 0:
 
-            current_loaded = tf.convert_to_tensor(current_loaded)
-            yield current_loaded
-
-    def load_box_gt(self, purpose):
-
-        CLASS_CNT = self.get_class_cnt()
-        
-        current_loaded = []
-        for _, img_d in self.imgs[purpose].items():
-            for bbox_d in img_d["objs"]:
-
-                current_loaded.append(tf.one_hot(bbox_d["category"], CLASS_CNT))
-
-                if len(current_loaded) == PRETRAIN_GT_LOAD_BATCH_SIZE:
-
-                    current_loaded = tf.convert_to_tensor(current_loaded)
-                    yield current_loaded
-
-                    current_loaded = []
-
-        if len(current_loaded) > 0:
-
-            current_loaded = tf.convert_to_tensor(current_loaded)
-            yield current_loaded
-
-    def load_pretrain_data(self, batch_size, purpose):
-        
-        if PRETRAIN_DATA_LOAD_BATCH_SIZE < batch_size:
-            tf.print("(Pretrain) Data load batch size must be >= with the train batch size")
-            quit()
-
-        if PRETRAIN_DATA_LOAD_BATCH_SIZE % batch_size != 0:
-            tf.print("(Pretrain) Data load batch size must be divisible with the train batch size")
-            quit()
-
-        load_2_b = PRETRAIN_DATA_LOAD_BATCH_SIZE // batch_size
-
-        gt_generator = self.load_box_gt(purpose)
-        for boxes in self.load_boxes(purpose):
-
-            classif_gt = next(gt_generator)
-
-            if boxes.shape[0] == PRETRAIN_DATA_LOAD_BATCH_SIZE:
-
-                idx = 0
-                for idx in range(load_2_b):
-                    lo = idx * batch_size
-                    hi = (idx + 1) * batch_size
-
-                    yield (tf.cast(boxes[lo: hi], tf.float32) / 255.0) * 2.0 - 1.0, classif_gt[lo: hi]
-            
-            else:
-
-                limit = boxes.shape[0] // batch_size
-
-                idx = 0
-                for idx in range(limit):
-                    lo = idx * batch_size
-                    hi = (idx + 1) * batch_size
-
-                    yield (tf.cast(boxes[lo: hi], tf.float32) / 255.0) * 2.0 - 1.0, classif_gt[lo: hi]
-
-                lo = limit * batch_size
-                yield (tf.cast(boxes[lo:], tf.float32) / 255.0) * 2.0 - 1.0, classif_gt[lo:]
+            yield (tf.convert_to_tensor(current_loaded, tf.float32) / 255.0) * 2.0 - 1.0, \
+                    tf.convert_to_tensor(current_gt_loaded)
 
     def load_info(self):
         '''

@@ -53,29 +53,12 @@ TMP_CACHE_KEY = "tmp"
     key for temporary cache, if needed
 '''
 
-PRETRAIN_DATA_LOAD_BATCH_SIZE = 128
-'''
-    batch size just for loading (pretrain data)
-'''
-
-PRETRAIN_GT_LOAD_BATCH_SIZE = PRETRAIN_DATA_LOAD_BATCH_SIZE
-'''
-    batch size just for loading ground truth (bool masks, target masks)
-'''
-assert(PRETRAIN_GT_LOAD_BATCH_SIZE == PRETRAIN_DATA_LOAD_BATCH_SIZE)
-
 PERMANENT_DATA_ENTRIES = 1000000
 '''
     how many data entries (imgs with their gts) to permanently store in memory (and be loaded only once)
 '''
 
-PERMANENT_PRETRAIN_DATA_BATCHES = 10000
-'''
-    how many bounding box batches to permanently store in memory (and be loaded only once)
-    * FOR PRETRAIN PHASE ONLY
-'''
-
-PERMANENT_PRETRAIN_DATA_ENTRIES = PERMANENT_PRETRAIN_DATA_BATCHES * PRETRAIN_DATA_LOAD_BATCH_SIZE
+PERMANENT_PRETRAIN_DATA_ENTRIES = 100000000
 '''
     how many bounding box entries to permanently store in memory (and be loaded only once)
     * FOR PRETRAIN PHASE ONLY

@@ -292,9 +292,9 @@ def main():
 
         model.compute_precision_recall_stats()
 
-    _test_mask_encoding()
+    #_test_mask_encoding()
     #_test_loss()
-    #_test_boxes()
+    _test_boxes()
     #_test_for_nan_inf()
     #_test_learning_few_img()
     #_test_pretrain_baseline()
