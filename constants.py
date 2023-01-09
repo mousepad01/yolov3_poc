@@ -77,11 +77,6 @@ COMPRESS_DATA_CACHE = True
     * whether to store image cache as jpg or bitmap in rap
 '''
 
-AUGMENT_DATA_PROBABILITY = 0.7
-'''
-    data augmentation probability
-'''
-
 '''
     ############################################ MODEL CONSTANTS ############################################
 '''

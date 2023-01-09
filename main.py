@@ -290,7 +290,7 @@ def main():
         data_loader = DataLoader(cache_key="all")
         data_loader.prepare()
 
-        model = Network(data_loader, cache_idx="test_adam_5e-5")
+        model = Network(data_loader, cache_idx="test_adam_5e-5_aug2")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9))
 
         model.predict(subset="validation")
@@ -311,14 +311,17 @@ def main():
         data_loader = DataLoader(cache_key="all")
         data_loader.prepare()
 
-        model = Network(data_loader, cache_idx="test_adam_5e-5")
+        model = Network(data_loader, cache_idx="test_adam_5e-5_aug2")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9))
 
         model.compute_precision_recall_stats()
 
+        ap_50 = model.get_ap(0.5)
+        tf.print(f"\nAP50: {ap_50}")
+
     #_test_mask_encoding()
     #_test_loss()
-    _test_boxes()
+    #_test_boxes()
     #_test_for_nan_inf()
     #_test_learning_few_img()
     #_test_pretrain_baseline()
@@ -327,7 +330,7 @@ def main():
     #_run_training2()
     #_show_stats()
     #_test_model()
-    #_find_ap()
+    _find_ap()
 
 if __name__ == "__main__":
     main()

@@ -211,7 +211,7 @@ class DataLoader:
         else:
             return tf.convert_to_tensor(_noise_contrast(image)), ground_truth
 
-    def load_data(self, batch_size, purpose, shuffle=True):
+    def load_data(self, batch_size, purpose, shuffle=True, augment_probability=0.7):
         '''
             * images get loaded on GPU at the cast when yielding
             * gt gets loaded on GPU at also when loading ???
@@ -236,7 +236,7 @@ class DataLoader:
             loaded_img = self.cache_manager.get_img(k, purpose)
             gt = self.cache_manager.get_gt(k)
 
-            if random.random() < AUGMENT_DATA_PROBABILITY:
+            if random.random() < augment_probability:
                 loaded_img, gt = self.augment_data(loaded_img, gt)
 
             current_img_loaded.append(loaded_img)
@@ -328,7 +328,7 @@ class DataLoader:
         else:
             return tf.convert_to_tensor(_noise_contrast(image))
 
-    def load_pretrain_data(self, batch_size, purpose, shuffle=True):
+    def load_pretrain_data(self, batch_size, purpose, shuffle=True, augment_probability=0.7):
 
         CLASS_CNT = self.get_class_cnt()
 
@@ -347,7 +347,7 @@ class DataLoader:
 
                 loaded_box = self.cache_manager.get_box(img_id, bbox_d["bbox"], purpose)
 
-                if random.random() < AUGMENT_DATA_PROBABILITY:
+                if random.random() < augment_probability:
                     loaded_box = self.augment_pretrain_data(loaded_box)
 
                 current_loaded.append(loaded_box)

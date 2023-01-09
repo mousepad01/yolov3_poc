@@ -178,14 +178,16 @@ class StatsManager:
         gt_xy_max = []
         gt_class = []
 
-        cl = gt_info["category"]
-        x, y, w, h = gt_info["bbox"]
+        for gt_box in gt_info:
 
-        xmin, ymin, xmax, ymax = x, y, x + w, y + h
+            cl = gt_box["category"]
+            x, y, w, h = gt_box["bbox"]
 
-        gt_xy_min.append(tf.convert_to_tensor([xmin, ymin], dtype=tf.float32))
-        gt_xy_max.append(tf.convert_to_tensor([xmax, ymax], dtype=tf.float32))
-        gt_class.append(cl)
+            xmin, ymin, xmax, ymax = x, y, x + w, y + h
+
+            gt_xy_min.append(tf.convert_to_tensor([xmin, ymin], dtype=tf.float32))
+            gt_xy_max.append(tf.convert_to_tensor([xmax, ymax], dtype=tf.float32))
+            gt_class.append(cl)
 
         for obj_thr in self._obj_thrs:
 
@@ -256,9 +258,16 @@ class StatsManager:
             # calculate precision, recall
 
             for obj_thr in self._obj_thrs:
-                
-                pr = self.pr_dict[cl][iou_threshold][obj_thr]["tp"] / self.pr_dict[cl][iou_threshold][obj_thr]["tp_fp"]
-                rec = self.pr_dict[cl][iou_threshold][obj_thr]["tp"] / self.pr_dict[cl][iou_threshold][obj_thr]["tp_fn"]
+
+                if self.pr_dict[cl][iou_threshold][obj_thr]["tp_fp"] == 0:
+                    pr = 0
+                else:
+                    pr = self.pr_dict[cl][iou_threshold][obj_thr]["tp"] / self.pr_dict[cl][iou_threshold][obj_thr]["tp_fp"]
+
+                if self.pr_dict[cl][iou_threshold][obj_thr]["tp_fn"] == 0:
+                    rec = 0
+                else:
+                    rec = self.pr_dict[cl][iou_threshold][obj_thr]["tp"] / self.pr_dict[cl][iou_threshold][obj_thr]["tp_fn"]
 
                 pr_rec[cl].append((pr, rec))
 
@@ -270,10 +279,11 @@ class StatsManager:
             for inter_rec in range(101):
                 ir = inter_rec / 100
 
-                while ir > pr_rec[cl][r_idx][1]:
+                while r_idx < len(pr_rec[cl]) and ir > pr_rec[cl][r_idx][1]:
                     r_idx += 1
 
-                ap[cl] += pr_rec[cl][r_idx][0]
+                if r_idx < len(pr_rec[cl]):
+                    ap[cl] += pr_rec[cl][r_idx][0]
 
             ap[cl] /= 101
 

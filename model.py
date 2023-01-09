@@ -331,7 +331,7 @@ class Network:
                 # train loop
 
                 batch_idx = 0
-                for (imgs, gt) in self.data_loader.load_pretrain_data(TRAIN_BATCH_SIZE, "train"):
+                for (imgs, gt) in self.data_loader.load_pretrain_data(TRAIN_BATCH_SIZE, "train", shuffle=True, augment_probability=0.7):
 
                     new_lr = self.pretrain_lr_scheduler(epoch, batch_idx, self.encoder.optimizer.learning_rate)
                     self.encoder.optimizer.learning_rate = new_lr
@@ -358,7 +358,7 @@ class Network:
 
                 # validation loop
 
-                for (imgs, gt) in self.data_loader.load_pretrain_data(VALIDATION_BATCH_SIZE, "validation"):
+                for (imgs, gt) in self.data_loader.load_pretrain_data(VALIDATION_BATCH_SIZE, "validation", augment_probability=0):
                     
                     out = self.encoder(imgs, training=False)
                     val_loss += encoder_loss(out, gt)
@@ -509,7 +509,7 @@ class Network:
                             obj_mask_size2, ignored_mask_size2, target_mask_size2, \
                             obj_mask_size3, ignored_mask_size3, target_mask_size3, \
                             gt_boxes) \
-                    in self.data_loader.load_data(TRAIN_BATCH_SIZE, "train"):
+                    in self.data_loader.load_data(TRAIN_BATCH_SIZE, "train", shuffle=True, augment_probability=0.7):
 
                     new_lr = self.lr_scheduler(epoch, batch_idx, self.full_network.optimizer.learning_rate)
                     self.full_network.optimizer.learning_rate = new_lr
@@ -557,7 +557,7 @@ class Network:
                             obj_mask_size2, ignored_mask_size2, target_mask_size2, \
                             obj_mask_size3, ignored_mask_size3, target_mask_size3, \
                             gt_boxes) \
-                    in self.data_loader.load_data(VALIDATION_BATCH_SIZE, "validation"):
+                    in self.data_loader.load_data(VALIDATION_BATCH_SIZE, "validation", augment_probability=0):
                     
                     out_s1, out_s2, out_s3 = self.full_network(imgs, training=False)
 
@@ -671,7 +671,7 @@ class Network:
 
         anchors_relative = [tf.cast(GRID_CELL_CNT[d] * (self.data_loader.anchors[d] / IMG_SIZE[0]), dtype=tf.float32) for d in range(SCALE_CNT)]
 
-        for (img, _, _, _, _, _, _, _, _, _, _) in self.data_loader.load_data(1, subset):
+        for (img, _, _, _, _, _, _, _, _, _, _) in self.data_loader.load_data(1, subset, shuffle=True, augment_probability=0):
 
             output = self.full_network(img, training=False)
             pred_xy_min, pred_xy_max, pred_class, pred_class_p = self.stats_manager.parse_prediction(output, anchors_relative, obj_threshold, nms_threshold)
@@ -693,15 +693,21 @@ class Network:
 
         ks = _get_keys()
 
-        cnt_ = 0
+        tf.print(f"Computing stats...")
 
-        for (img, _, _, _, _, _, _, _, _, _, _) in self.data_loader.load_data(1, subset, shuffle=False):
+        cnt_ = 0
+        TOTAL_IMG_CNT = self.data_loader.get_img_cnt("validation")
+        progbar = tf.keras.utils.Progbar(TOTAL_IMG_CNT)
+
+        for (img, _, _, _, _, _, _, _, _, _, _) in self.data_loader.load_data(1, subset, shuffle=False, augment_probability=0):
 
             k = next(ks)
             output = self.full_network(img, training=False)
 
-            for bbox_d in self.data_loader.imgs[subset][k]["objs"]:
-                self.stats_manager.update_tp_fp_fn(output, bbox_d, anchors_relative, nms_threshold)
+            self.stats_manager.update_tp_fp_fn(output, self.data_loader.imgs[subset][k]["objs"], anchors_relative, nms_threshold)
+
+            progbar.update(cnt_)
+            cnt_ += 1
 
         self.cache_manager.store_stats_manager()
 
@@ -1050,6 +1056,6 @@ class NetworkCacheManager:
         if self.cache_key is not None:
         
             with open(f"{VALIDATION_STATS_PATH}{self.cache_key}_{self.cache_idx}_stats_manager", "wb+") as stats_f:
-                stats_manager = pickle.dumps(self.network.cache_manager)
+                stats_manager = pickle.dumps(self.network.stats_manager)
                 stats_f.write(stats_manager)
                 
