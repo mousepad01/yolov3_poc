@@ -238,26 +238,65 @@ def main():
         data_loader.prepare()
 
         EPOCHS = 160
-        P_EPOCHS = 10
+        P_EPOCHS = 3
+
+        '''lrs = {e: 5e-5 for e in range(EPOCHS)}
+        lr_sched = Lr_dict_sched(lrs)
+
+        p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
+        p_lr_sched = Lr_dict_sched(p_lrs)'''
+
+        LR_CH1 = 60
+        LR_CH2 = 90
+        LR_CH3 = 200
+
+        lrs = {e: 1e-3 for e in range(LR_CH1)}
+        lrs.update({e: 1e-4 for e in range(LR_CH1, LR_CH2)})
+        lrs.update({e: 1e-5 for e in range(LR_CH2, LR_CH3)})
+
+        lr_sched = Lr_dict_sched(lrs)
+
+        p_lrs = {e: 1e-2 for e in range(P_EPOCHS)}
+        p_lr_sched = Lr_dict_sched(p_lrs)
+        #
+        ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
+
+        model = Network(data_loader, cache_idx="pretrained_3ep")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, momentum=0.9, nesterov=True), lr_scheduler=lr_sched, 
+                                pretrain_optimizer=tf.optimizers.SGD(1e-2, momentum=0.9, nesterov=True), pretrain_lr_scheduler=p_lr_sched)
+        model.pretrain_encoder(P_EPOCHS, 32, progbar=False, copy_at_checkpoint=False)
+        model.copy_model("test_sgd_1e-3_aug")
+
+        model = Network(data_loader, cache_idx="test_sgd_1e-3_aug")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, momentum=0.9, nesterov=True), lr_scheduler=lr_sched, 
+                                pretrain_optimizer=tf.optimizers.SGD(1e-2, momentum=0.9, nesterov=True), pretrain_lr_scheduler=p_lr_sched)
+        model.train(EPOCHS, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False, save_on_keyboard_interrupt=False, burnin=True)
+
+    def _run_training2():
+
+        data_loader = DataLoader(cache_key="all")
+        data_loader.prepare()
+
+        EPOCHS = 160
+        P_EPOCHS = 3
 
         lrs = {e: 5e-5 for e in range(EPOCHS)}
-        lr_sched = Lr_dict_sched(lrs)
+        lr_sched = Lr_cosine_decay(5e-6, 5e-5, EPOCHS)
 
         p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
         p_lr_sched = Lr_dict_sched(p_lrs)
 
         ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
 
-        model = Network(data_loader, cache_idx="test_adam_5e-5")
+        model = Network(data_loader, cache_idx="test_adam_5e-5_aug2")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), lr_scheduler=lr_sched, 
-                                pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9), pretrain_lr_scheduler=p_lr_sched)
-        model.pretrain_encoder(1, 32, progbar=False, copy_at_checkpoint=False)
+                                pretrain_optimizer=tf.optimizers.SGD(1e-2, momentum=0.9, nesterov=True), pretrain_lr_scheduler=p_lr_sched)
         model.train(EPOCHS, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False, save_on_keyboard_interrupt=False, burnin=False)
 
     def _show_stats():
 
         data_loader = DataLoader(cache_key="all")
-        model = Network(data_loader, cache_idx="test_adam_5e-5_aug")
+        model = Network(data_loader, cache_idx="test_adam_5e-5_aug2")
         #model.plot_pretrain_stats(show_on_screen=True, save_image=False)
         model.plot_train_stats(show_on_screen=True, save_image=False)
 
@@ -294,13 +333,14 @@ def main():
 
     #_test_mask_encoding()
     #_test_loss()
-    _test_boxes()
+    #_test_boxes()
     #_test_for_nan_inf()
     #_test_learning_few_img()
     #_test_pretrain_baseline()
     #_run_training_detonly()
     #_run_training()
-    #_show_stats()
+    #_run_training2()
+    _show_stats()
     #_test_model()
     #_find_ap()
 

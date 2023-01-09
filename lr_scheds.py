@@ -6,7 +6,7 @@ class Lr_constant:
     def __init__(self):
         pass
 
-    def __call__(self, _, lr):
+    def __call__(self, epoch, batch_idx, lr):
         return lr
 
 class Lr_dict_sched:
@@ -15,7 +15,7 @@ class Lr_dict_sched:
 
         self.lr_dict = lr_dict
 
-    def __call__(self, epoch, _):
+    def __call__(self, epoch, batch_idx, lr):
         return self.lr_dict[epoch]
 
 class Lr_linear_decay:
@@ -25,7 +25,7 @@ class Lr_linear_decay:
         self.rate = rate
         self.epochs = epochs
 
-    def __call__(self, epoch, lr):
+    def __call__(self, epoch, batch_idx, lr):
         
         if epoch < self.epochs:
             return lr * self.rate
@@ -33,6 +33,9 @@ class Lr_linear_decay:
         return lr
 
 class Lr_cosine_decay:
+    '''
+        NOTE: decay every epoch, not batch
+    '''
 
     def __init__(self, min_lr, max_lr, period):
 
@@ -43,5 +46,24 @@ class Lr_cosine_decay:
 
         self.PI = tf.constant(np.pi)
 
-    def __call__(self, epoch, _):
+    def __call__(self, epoch, batch_idx, lr):
         return self.min_lr + 1 / 2 * (self.max_lr - self.min_lr) * (1 + tf.cos(self.PI * (epoch / self.period)))
+
+class Triangular_rate_policy:
+
+    def __init__(self, min_lr, max_lr, stepsize, b2e):
+
+        self.min_lr = min_lr
+        self.max_lr = max_lr
+        self.stepsize = stepsize
+
+        self.b2e = b2e
+        
+    def __call__(self, epoch, batch_idx, lr):
+
+        epoch += batch_idx * self.b2e
+
+        cycle = tf.floor(1 + epoch / (2 * self.stepsize))
+        x = tf.abs(epoch / self.stepsize - 2 * cycle + 1)
+
+        return self.min_lr + (self.max_lr - self.min_lr) * max(0, 1 - x)

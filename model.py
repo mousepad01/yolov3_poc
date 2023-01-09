@@ -315,13 +315,10 @@ class Network:
         for epoch in range(self.next_pretrain_epoch, epochs, 1):
 
             try:
-                
-                new_lr = self.pretrain_lr_scheduler(epoch, self.encoder.optimizer.learning_rate)
-                self.encoder.optimizer.learning_rate = new_lr
 
                 if progbar:
                     progbar_output = tf.keras.utils.Progbar(TRAIN_BATCH_CNT)
-                tf.print(f"\n(Pretrain) Epoch {epoch} (lr {new_lr}):")
+                tf.print(f"\n(Pretrain) Epoch {epoch}:")
 
                 # loss stats variables
 
@@ -335,6 +332,9 @@ class Network:
 
                 batch_idx = 0
                 for (imgs, gt) in self.data_loader.load_pretrain_data(TRAIN_BATCH_SIZE, "train"):
+
+                    new_lr = self.pretrain_lr_scheduler(epoch, batch_idx, self.encoder.optimizer.learning_rate)
+                    self.encoder.optimizer.learning_rate = new_lr
 
                     with tf.GradientTape() as tape:
                         
@@ -481,13 +481,10 @@ class Network:
         for epoch in range(self.next_train_epoch, epochs, 1):
 
             try:
-                
-                new_lr = self.lr_scheduler(epoch, self.full_network.optimizer.learning_rate)
-                self.full_network.optimizer.learning_rate = new_lr
 
                 if progbar:
                     progbar_output = tf.keras.utils.Progbar(TRAIN_BATCH_CNT)
-                tf.print(f"\nEpoch {epoch} (lr {new_lr}):")
+                tf.print(f"\nEpoch {epoch}:")
 
                 # loss stats variables
 
@@ -514,10 +511,8 @@ class Network:
                             gt_boxes) \
                     in self.data_loader.load_data(TRAIN_BATCH_SIZE, "train"):
 
-                    if burnin and epoch == 0 and batch_idx <= 1000:
-                        
-                        new_lr = 1e-3 * (batch_idx / 1000) ** 4
-                        self.full_network.optimizer.learning_rate = new_lr
+                    new_lr = self.lr_scheduler(epoch, batch_idx, self.full_network.optimizer.learning_rate)
+                    self.full_network.optimizer.learning_rate = new_lr
 
                     with tf.GradientTape() as tape:
 
