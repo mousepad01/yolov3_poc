@@ -101,6 +101,7 @@ PRETRAIN_BOX_SIZE = (128, 128)
 '''
     size for input in classification pre-training of backbone
 '''
+assert(PRETRAIN_BOX_SIZE <= IMG_SIZE)
 
 GRID_CELL_CNT = [13, 26, 52]
 '''

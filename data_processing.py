@@ -189,6 +189,14 @@ class DataLoader:
 
             return img, (obj_m, ign_m, tar_m, gt_boxes)
 
+        # unused
+        def _flip_channels(img):
+            
+            order = [0, 1, 2]
+            random.shuffle(order)
+
+            return np.stack([img[..., order[0]], img[..., order[1]], img[..., order[2]]], axis=2)
+
         image = np.array(image)
 
         a = random.random()
@@ -275,6 +283,51 @@ class DataLoader:
                     tf.convert_to_tensor(current_tm_loaded[2]), \
                     tf.reshape(tf.convert_to_tensor(current_gtboxes_loaded), (len(current_img_loaded), 1, 1, 1, -1, 4))
 
+    def augment_pretrain_data(self, image):
+
+        def _blur_contrast(img):
+
+            contrast = 1 + ((random.random() * 2 - 1) / 5)
+
+            img = cv.blur(img, (2, 2))
+            img = np.ndarray.astype(np.clip(img * contrast, 0, 255), np.uint8)
+
+            return img
+
+        def _noise_contrast(img):
+
+            noise_mask = NOISE_MASK_POOL[np.random.randint(0, NOISE_MASK_POOL_LEN - 1)][:PRETRAIN_BOX_SIZE[0], :PRETRAIN_BOX_SIZE[1], :]
+            contrast = 1 + ((random.random() * 2 - 1) / 5)
+
+            img = np.ndarray.astype(np.clip(img * contrast + noise_mask, 0, 255), np.uint8)
+
+            return img
+
+        def _flip_leftright(img):
+            return cv.flip(img, 1)
+
+        # unused
+        def _flip_channels(img):
+            
+            order = [0, 1, 2]
+            random.shuffle(order)
+
+            return np.stack([img[..., order[0]], img[..., order[1]], img[..., order[2]]], axis=2)
+
+        image = np.array(image)
+
+        a = random.random()
+
+        if a < 0.5:
+            image = _flip_leftright(image)
+
+        a = random.random()
+
+        if a < 0.5:
+            return tf.convert_to_tensor(_blur_contrast(image))
+        else:
+            return tf.convert_to_tensor(_noise_contrast(image))
+
     def load_pretrain_data(self, batch_size, purpose, shuffle=True):
 
         CLASS_CNT = self.get_class_cnt()
@@ -292,7 +345,12 @@ class DataLoader:
 
             for bbox_d in img_d["objs"]:
 
-                current_loaded.append(self.cache_manager.get_box(img_id, bbox_d["bbox"], purpose))
+                loaded_box = self.cache_manager.get_box(img_id, bbox_d["bbox"], purpose)
+
+                if random.random() < AUGMENT_DATA_PROBABILITY:
+                    loaded_box = self.augment_pretrain_data(loaded_box)
+
+                current_loaded.append(loaded_box)
                 current_gt_loaded.append(tf.one_hot(bbox_d["category"], CLASS_CNT))
 
                 if len(current_loaded) == batch_size:

@@ -406,7 +406,7 @@ class Network:
             self.cache_manager.store_pretrain_stats(stats)
 
     def train(self, epochs, batch_size, progbar=True, checkpoint_sched=lambda epoch, loss, vloss: False, copy_at_checkpoint=True, 
-                burnin=False, save_on_keyboard_interrupt=True):
+                save_on_keyboard_interrupt=True):
         '''
             * epochs: number of total epochs (effective number of epochs executed: epochs - self.next_train_epoch + 1)
             * batch_size: for training
