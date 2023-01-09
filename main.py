@@ -17,7 +17,7 @@ def main():
 
         tf.print("BEFORE START: change dataloader to first YIELD THE KEYS")
 
-        data_loader = DataLoader(cache_key="all")
+        data_loader = DataLoader(cache_key="all2")
         data_loader.prepare()
 
         stats_manager = StatsManager(data_loader.onehot_to_name, iou_thresholds=[], confidence_thresholds=[])
@@ -31,7 +31,7 @@ def main():
 
         for _ in range(4):
 
-            dl = data_loader.load_data(BSIZE, "train")
+            dl = data_loader.load_data(BSIZE, "train", shuffle=False)
             img_keys = next(dl)
             img_keys = _getkeys(img_keys)
 
@@ -319,7 +319,7 @@ def main():
         ap_50 = model.get_ap(0.5)
         tf.print(f"\nAP50: {ap_50}")
 
-    #_test_mask_encoding()
+    _test_mask_encoding()
     #_test_loss()
     #_test_boxes()
     #_test_for_nan_inf()
@@ -330,7 +330,7 @@ def main():
     #_run_training2()
     #_show_stats()
     #_test_model()
-    _find_ap()
+    #_find_ap()
 
 if __name__ == "__main__":
     main()

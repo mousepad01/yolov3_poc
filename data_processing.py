@@ -3,6 +3,7 @@ import zlib
 import pickle
 import os
 import random
+import time
 
 import cv2 as cv
 import numpy as np
@@ -223,7 +224,7 @@ class DataLoader:
             random.shuffle(keys)
 
         # FIXME
-        #yield keys
+        yield keys
 
         current_img_loaded = []
         current_om_loaded = [[] for _ in range(SCALE_CNT)]
@@ -548,8 +549,139 @@ class DataLoader:
             tf.print("anchors not yet determined")
             quit()
 
-        if self.cache_manager.check_gt():
-            return
+        '''if self.cache_manager.check_gt():
+            return'''
+
+        for purpose in ["train", "validation"]:
+            for img_id in self.imgs[purpose].keys():
+
+                self.max_true_boxes = max(len(self.imgs[purpose][img_id]["objs"]), self.max_true_boxes)
+
+        ans = np.array(self.anchors, dtype=np.float32)
+        an_area = ans[..., 0] * ans[..., 1]
+        ans_rel = ans / IMG_SIZE[0]
+        ans_rel = np.stack([ans_rel[0] * GRID_CELL_CNT[0], ans_rel[1] * GRID_CELL_CNT[1], ans_rel[2] * GRID_CELL_CNT[2]])
+
+        for purpose in ["train", "validation"]:
+            
+            for img_id in self.imgs[purpose].keys():
+
+                obj_mask = []
+                ignored_mask = []
+                target_mask = []
+
+                for d in range(SCALE_CNT):
+
+                    obj_mask.append(np.zeros((GRID_CELL_CNT[d], GRID_CELL_CNT[d], ANCHOR_PERSCALE_CNT, 1), dtype=np.float32))
+                    ignored_mask.append(np.zeros((GRID_CELL_CNT[d], GRID_CELL_CNT[d], ANCHOR_PERSCALE_CNT, 1), dtype=np.float32))
+                    target_mask.append(np.zeros((GRID_CELL_CNT[d], GRID_CELL_CNT[d], ANCHOR_PERSCALE_CNT, 5), dtype=np.float32))
+            
+                for bbox_d in self.imgs[purpose][img_id]["objs"]:
+
+                    categ = np.int32(bbox_d["category"])
+                    x, y, w, h = bbox_d["bbox"]
+
+                    wh = w * h
+
+                    max_iou_idx = None
+                    max_iou_scale = None
+
+                    an_int = np.minimum(self.anchors[..., 0], w) * np.minimum(self.anchors[..., 1], h)
+                    an_union = wh + an_area - an_int
+
+                    an_iou = an_int / an_union
+                    max_an_iou = np.argmax(an_iou)
+                    max_iou_scale, max_iou_idx = max_an_iou // SCALE_CNT, max_an_iou % ANCHOR_PERSCALE_CNT
+
+                    an_iou_ign = an_iou > IGNORED_IOU_THRESHOLD
+                    ignore_anchors_x, ignore_anchors_y = np.nonzero(an_iou_ign)
+
+                    x_, y_, w_, h_ = x + w // 2, y + h // 2, w, h
+                    x_, y_, w_, h_ = x_ / IMG_SIZE[0], y_ / IMG_SIZE[1], w_ / IMG_SIZE[0], h_ / IMG_SIZE[1]
+                    x_, y_, w_, h_ = x_ * GRID_CELL_CNT[max_iou_scale], y_ * GRID_CELL_CNT[max_iou_scale], w_ * GRID_CELL_CNT[max_iou_scale], h_ * GRID_CELL_CNT[max_iou_scale]
+
+                    if x_ == np.floor(x_):
+                        x_ -= 0.05
+
+                    if y_ == np.floor(y_):
+                        y_ -= 0.05
+
+                    cx, cy = np.int32(np.floor(x_)), np.int32(np.floor(y_))
+                    x_, y_ = x_ - cx, y_ - cy 
+
+                    anchor_w = ans_rel[max_iou_scale, max_iou_idx, 0]
+                    anchor_h = ans_rel[max_iou_scale, max_iou_idx, 1]
+
+                    obj_mask[max_iou_scale][cx][cy][max_iou_idx][0] = 1.0
+                    target_mask[max_iou_scale][cx][cy][max_iou_idx][0] = np.log(x_ / (1 - x_))
+                    target_mask[max_iou_scale][cx][cy][max_iou_idx][1] = np.log(y_ / (1 - y_))
+                    target_mask[max_iou_scale][cx][cy][max_iou_idx][2] = np.log(w_ / anchor_w)
+                    target_mask[max_iou_scale][cx][cy][max_iou_idx][3] = np.log(h_ / anchor_h)
+                    target_mask[max_iou_scale][cx][cy][max_iou_idx][4] = categ
+
+                    '''if tf.reduce_sum(tf.cast(tf.math.is_nan(target_mask[max_iou_scale][cx][cy][max_iou_idx]), tf.int32)) > 0:
+                        tf.print("Nan found when assigning anchors; possible error?")
+                        quit()
+
+                    if tf.reduce_sum(tf.cast(tf.math.is_inf(target_mask[max_iou_scale][cx][cy][max_iou_idx]), tf.int32)) > 0:
+                        tf.print("Inf found when assigning anchors; try to make MIN_BBOX_DIM bigger.")
+                        quit()'''
+
+                    x, y = x + w // 2, y + h // 2
+                    x, y = x / IMG_SIZE[0], y / IMG_SIZE[1]
+
+                    for ign_idx in range(ignore_anchors_x.shape[0]):
+
+                        a_scale, a_idx = ignore_anchors_x[ign_idx], ignore_anchors_y[ign_idx]
+
+                        x_, y_ = x * GRID_CELL_CNT[a_scale], y * GRID_CELL_CNT[a_scale]
+                        if x_ == np.floor(x_):
+                            x_ -= 0.05
+                        if y_ == np.floor(y_):
+                            y_ -= 0.05
+
+                        cx, cy = np.int32(np.floor(x_)), np.int32(np.floor(y_))
+                        
+                        ignored_mask[a_scale][cx][cy][a_idx][0] = 1
+
+                for d in range(SCALE_CNT):
+                    ignored_mask[d] = np.logical_and(obj_mask[d] == 0, ignored_mask[d] == 1)
+
+                for d in range(SCALE_CNT):
+
+                    obj_mask[d] = tf.convert_to_tensor(obj_mask[d], dtype=tf.float32)
+                    ignored_mask[d] = tf.convert_to_tensor(ignored_mask[d], dtype=tf.float32)
+                    target_mask[d] = tf.convert_to_tensor(target_mask[d], dtype=tf.float32)
+
+                gt_boxes = []
+                for bbox_d in self.imgs[purpose][img_id]["objs"]:
+
+                    x, y, w, h = bbox_d["bbox"]
+                    xmin, ymin, xmax, ymax = x, y, x + w, y + h
+                    xmin, ymin, xmax, ymax = xmin / IMG_SIZE[0], ymin / IMG_SIZE[1], xmax / IMG_SIZE[0], ymax / IMG_SIZE[1]
+
+                    gt_boxes.append([xmin, ymin, xmax, ymax])
+
+                for _ in range(len(gt_boxes), self.max_true_boxes, 1):
+                    gt_boxes.append([0, 0, 0, 0])
+
+                #assert(len(gt_boxes) == self.max_true_boxes)
+                gt_boxes = tf.convert_to_tensor(gt_boxes, dtype=tf.float32)
+
+                self.cache_manager.store_gt(obj_mask, ignored_mask, target_mask, gt_boxes, img_id)
+
+    def assign_anchors_to_objects_(self):
+
+        if self.used_categories == {}:
+            tf.print("info not yet loaded")
+            quit()
+
+        if self.anchors == []:
+            tf.print("anchors not yet determined")
+            quit()
+
+        '''if self.cache_manager.check_gt():
+            return'''
 
         def _iou(anchor, w, h):
             
@@ -629,13 +761,13 @@ class DataLoader:
                                                                                             tf.convert_to_tensor([categ], dtype=tf.double)],
                                                                                             axis=0), dtype=np.float64)
 
-                    if tf.reduce_sum(tf.cast(tf.math.is_nan(target_mask[max_iou_scale][cx][cy][max_iou_idx]), tf.int32)) > 0:
+                    '''if tf.reduce_sum(tf.cast(tf.math.is_nan(target_mask[max_iou_scale][cx][cy][max_iou_idx]), tf.int32)) > 0:
                         tf.print("Nan found when assigning anchors; possible error?")
                         quit()
 
                     if tf.reduce_sum(tf.cast(tf.math.is_inf(target_mask[max_iou_scale][cx][cy][max_iou_idx]), tf.int32)) > 0:
                         tf.print("Inf found when assigning anchors; try to make MIN_BBOX_DIM bigger.")
-                        quit()
+                        quit()'''
 
                     for a_idx, a_scale in ignore_anchors:
                         
@@ -681,11 +813,11 @@ class DataLoader:
                 for _ in range(len(gt_boxes), self.max_true_boxes, 1):
                     gt_boxes.append([0, 0, 0, 0])
 
-                assert(len(gt_boxes) == self.max_true_boxes)
+                #assert(len(gt_boxes) == self.max_true_boxes)
                 gt_boxes = tf.convert_to_tensor(gt_boxes, dtype=tf.float32)
 
                 self.cache_manager.store_gt(obj_mask, ignored_mask, target_mask, gt_boxes, img_id)
-
+    
     def test_for_nan_inf(self):
 
         for purpose in ["train", "validation"]:
