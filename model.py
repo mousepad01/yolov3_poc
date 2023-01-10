@@ -509,7 +509,7 @@ class Network:
                             obj_mask_size2, ignored_mask_size2, target_mask_size2, \
                             obj_mask_size3, ignored_mask_size3, target_mask_size3, \
                             gt_boxes) \
-                    in self.data_loader.load_data(TRAIN_BATCH_SIZE, "train", shuffle=True, augment_probability=0.7):
+                    in self.data_loader.load_data(TRAIN_BATCH_SIZE, "train", shuffle=True, augment_probability=0.8):
 
                     new_lr = self.lr_scheduler(epoch, batch_idx, self.full_network.optimizer.learning_rate)
                     self.full_network.optimizer.learning_rate = new_lr

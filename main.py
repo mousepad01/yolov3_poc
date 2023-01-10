@@ -273,7 +273,7 @@ def main():
 
         ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
 
-        model = Network(data_loader, cache_idx="test_adam_5e-5_aug2")
+        model = Network(data_loader, cache_idx="test_adam_5e-5_aug3")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), lr_scheduler=lr_sched, 
                                 pretrain_optimizer=tf.optimizers.SGD(1e-2, momentum=0.9, nesterov=True), pretrain_lr_scheduler=p_lr_sched)
         model.train(EPOCHS, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False, save_on_keyboard_interrupt=False)
@@ -281,7 +281,7 @@ def main():
     def _show_stats():
 
         data_loader = DataLoader(cache_key="all")
-        model = Network(data_loader, cache_idx="test_adam_5e-5_aug2")
+        model = Network(data_loader, cache_idx="test_adam_5e-5_triangular")
         #model.plot_pretrain_stats(show_on_screen=True, save_image=False)
         model.plot_train_stats(show_on_screen=True, save_image=False)
 
@@ -319,7 +319,7 @@ def main():
         ap_50 = model.get_ap(0.5)
         tf.print(f"\nAP50: {ap_50}")
 
-    _test_mask_encoding()
+    #_test_mask_encoding()
     #_test_loss()
     #_test_boxes()
     #_test_for_nan_inf()
@@ -327,7 +327,7 @@ def main():
     #_test_pretrain_baseline()
     #_run_training_detonly()
     #_run_training()
-    #_run_training2()
+    _run_training2()
     #_show_stats()
     #_test_model()
     #_find_ap()

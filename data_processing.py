@@ -192,7 +192,7 @@ class DataLoader:
 
             return img, (obj_m, ign_m, tar_m, gt_boxes)
 
-        def _shearing(img, gt, purpose, img_id):
+        def _shearing(img, purpose, img_id):
             
             sh_x = random.random() / 5
             sh_y = random.random() / 5
@@ -217,7 +217,7 @@ class DataLoader:
                 
             return img, self.create_gt(sheared_objs)
 
-        def _rotation(img, gt, purpose, img_id):
+        def _rotation(img, purpose, img_id):
             
             alpha = (random.random() * 2 / 3) - 0.33
             cos = np.cos(alpha)
@@ -283,13 +283,13 @@ class DataLoader:
         image = np.array(image)
 
         a = random.random()
-        if a < 0:#0.33:
-            image, ground_truth = _shearing(image, ground_truth, purpose, img_id)
-        elif a < 1:#0.66:
-            image, ground_truth = _rotation(image, ground_truth, purpose, img_id)
+        if a < 0.5:
+            image, ground_truth = _shearing(image, purpose, img_id)
+        else:
+            image, ground_truth = _rotation(image, purpose, img_id)
 
         a = random.random()
-        if a < 0:#0.5:
+        if a < 0.5:
             image, ground_truth = _flip_leftright(image, ground_truth)
 
         a = random.random()
@@ -298,7 +298,7 @@ class DataLoader:
         else:
             return tf.convert_to_tensor(_noise_contrast(image)), ground_truth
 
-    def load_data(self, batch_size, purpose, shuffle=True, augment_probability=0.7):
+    def load_data(self, batch_size, purpose, shuffle=True, augment_probability=0.8):
         '''
             * images get loaded on GPU at the cast when yielding
             * gt gets loaded on GPU at also when loading ???
