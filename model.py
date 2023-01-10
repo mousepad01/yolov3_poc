@@ -52,7 +52,7 @@ class Network:
             the cache manager
         '''
 
-        self.stats_manager = self.cache_manager.get_stats_manager()
+        self.stats_manager, self.stats_computed = self.cache_manager.get_stats_manager()
         '''
             it is responsible for prediction rendering and model stats other than the loss (mAP, PR curve)
         '''
@@ -679,10 +679,14 @@ class Network:
             self.stats_manager.show_prediction(np.array(((img[0] + 1.0) / 2.0) * 255.0, dtype=np.uint8), \
                                                 pred_xy_min, pred_xy_max, pred_class, pred_class_p)
 
-    def compute_precision_recall_stats(self, subset="validation", nms_threshold=0.6):
+    def compute_precision_recall_stats(self, subset="validation", nms_threshold=0.6, overwrite_old_stats=False):
 
         if self._status < Network.TRAINING_DETECTION:
             tf.print("Network not yet initialized")
+            return
+
+        if self.stats_computed and (overwrite_old_stats is False):
+            tf.print("Validation stats (tp, fp, fn) are already computed.")
             return
 
         def _get_keys():
@@ -709,6 +713,7 @@ class Network:
             progbar.update(cnt_)
             cnt_ += 1
 
+        self.stats_computed = True
         self.cache_manager.store_stats_manager()
 
     def get_ap(self, threshold):
@@ -716,6 +721,18 @@ class Network:
 
     def get_mean_ap(self):
         return self.stats_manager.get_mean_ap()
+
+    def get_precision_recall(self, obj_thresh=0.6, iou_thresh=0.6):
+
+        tp = 0
+        tp_fp = 0
+        tp_fn = 0
+        for pr_dict_perclass in self.stats_manager.pr_dict.values():
+            tp += pr_dict_perclass[iou_thresh][obj_thresh]["tp"]
+            tp_fp += pr_dict_perclass[iou_thresh][obj_thresh]["tp_fp"]
+            tp_fn += pr_dict_perclass[iou_thresh][obj_thresh]["tp_fn"]
+
+        return tp / tp_fp, tp / tp_fn
 
 class NetworkCacheManager:
 
@@ -1044,12 +1061,12 @@ class NetworkCacheManager:
             with open(f"{VALIDATION_STATS_PATH}{self.cache_key}_{self.cache_idx}_stats_manager", "rb") as stats_f:
                 stats_manager = pickle.loads(stats_f.read())
             
-            return stats_manager
+            return stats_manager, True
 
         except FileNotFoundError:
             return StatsManager(self.network.data_loader.onehot_to_name, \
                                 iou_thresholds=[thr / 100 for thr in range(0, 100, 5)], \
-                                confidence_thresholds=[thr / 100 for thr in range(10, 100, 5)])
+                                confidence_thresholds=[thr / 100 for thr in range(10, 100, 5)]), False
 
     def store_stats_manager(self):
 

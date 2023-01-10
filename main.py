@@ -17,7 +17,7 @@ def main():
 
         tf.print("BEFORE START: change dataloader to first YIELD THE KEYS")
 
-        data_loader = DataLoader(cache_key="all2")
+        data_loader = DataLoader(cache_key="all")
         data_loader.prepare()
 
         stats_manager = StatsManager(data_loader.onehot_to_name, iou_thresholds=[], confidence_thresholds=[])
@@ -31,7 +31,7 @@ def main():
 
         for _ in range(4):
 
-            dl = data_loader.load_data(BSIZE, "train", shuffle=False)
+            dl = data_loader.load_data(BSIZE, "train", shuffle=True)
             img_keys = next(dl)
             img_keys = _getkeys(img_keys)
 

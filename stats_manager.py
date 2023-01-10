@@ -93,7 +93,7 @@ class StatsManager:
             pred_xy_min, pred_xy_max: PREDS x 2 (absolute coord prediction)
             pred_class: PREDS
             pred_class_p: PREDS
-            (optional) ground truth info: [{"category": one hot idx, "bbox": (x, y, w, h) absolute}, ...]
+            (optional) ground truth info: [(categ one hot idx, x, y, w, h), ...]
         '''
 
         image =  cv.resize(image, (int(IMG_SIZE[0] * SHOW_RESIZE_FACTOR), int(IMG_SIZE[1] * SHOW_RESIZE_FACTOR)))
@@ -105,14 +105,14 @@ class StatsManager:
 
             for bbox_d in ground_truth_info:
 
-                predicted_class = int(bbox_d["category"])
+                predicted_class = int(bbox_d[0])
 
                 if self.categ_to_name is not None:
                     class_output = self.categ_to_name[predicted_class]
                 else:
                     class_output = predicted_class
 
-                x, y, w, h = bbox_d["bbox"]
+                _, x, y, w, h = bbox_d
                 x_min, y_min = int(x * SHOW_RESIZE_FACTOR), int(y * SHOW_RESIZE_FACTOR)
                 x_max, y_max = int((x + w) * SHOW_RESIZE_FACTOR), int((y + h) * SHOW_RESIZE_FACTOR)
 
@@ -180,8 +180,7 @@ class StatsManager:
 
         for gt_box in gt_info:
 
-            cl = gt_box["category"]
-            x, y, w, h = gt_box["bbox"]
+            cl, x, y, w, h = gt_box
 
             xmin, ymin, xmax, ymax = x, y, x + w, y + h
 

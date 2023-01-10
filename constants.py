@@ -30,7 +30,7 @@ VALIDATION_INFO_PATH = "./data/annotations/instances_val2017.json"
 
 DATA_CACHE_PATH = "./data_cache/"
 '''
-    (relative) path for storing data (anchors, gt masks) caches
+    (relative) path for storing data (currently only anchors) caches
 '''
 
 MODEL_CACHE_PATH = "./saved_models/"
@@ -143,7 +143,7 @@ SHOW_RESIZE_FACTOR = 2.3
     ############################################ RANDOMNESS ############################################
 '''
 
-NOISE_MASK_POOL_LEN = 1000
+NOISE_MASK_POOL_LEN = 1024
 '''
     how many noise masks for image augmentation to precompute
 '''
