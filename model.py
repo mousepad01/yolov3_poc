@@ -84,10 +84,6 @@ class Network:
             Copy model cache and its stats under new cache_idx (same cache_key)
         '''
 
-        if self._status is Network.NOT_CREATED:
-            tf.print("Model has not been created. Nothing to copy.")
-            return
-
         self.cache_manager.copy_model(new_cache_idx)
        
     def _update_encoder_weights(self):

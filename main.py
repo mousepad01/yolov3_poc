@@ -240,22 +240,20 @@ def main():
         EPOCHS = 160
         P_EPOCHS = 3
 
-        BATCH_SIZE = 32
-
-        img_cnt = data_loader.get_img_cnt("train")
-        b2e = BATCH_SIZE / img_cnt
-
-        lr_sched = Triangular_rate_policy(5e-6, 5e-5, 2, b2e)
+        lr_sched = Lr_cosine_decay(1e-6, 1e-5, EPOCHS)
 
         p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
         p_lr_sched = Lr_dict_sched(p_lrs)
 
         ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
 
-        model = Network(data_loader, cache_idx="test_adam_5e-5_triangular")
-        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-6), lr_scheduler=lr_sched, 
+        model = Network(data_loader, cache_idx="test_adam_5e-5_aug3")
+        model.copy_model("test_adam_1e-5_aug3")
+
+        model = Network(data_loader, cache_idx="test_adam_1e-5_aug3")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(1e-5), lr_scheduler=lr_sched, 
                                 pretrain_optimizer=tf.optimizers.SGD(1e-2, momentum=0.9, nesterov=True), pretrain_lr_scheduler=p_lr_sched)
-        model.train(EPOCHS, BATCH_SIZE, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False, save_on_keyboard_interrupt=False)
+        model.train(EPOCHS, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False, save_on_keyboard_interrupt=False)
 
     def _run_training2():
 
@@ -265,7 +263,6 @@ def main():
         EPOCHS = 160
         P_EPOCHS = 3
 
-        lrs = {e: 5e-5 for e in range(EPOCHS)}
         lr_sched = Lr_cosine_decay(5e-6, 5e-5, EPOCHS)
 
         p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
@@ -281,7 +278,7 @@ def main():
     def _show_stats():
 
         data_loader = DataLoader(cache_key="all")
-        model = Network(data_loader, cache_idx="test_adam_5e-5_triangular")
+        model = Network(data_loader, cache_idx="test_adam_5e-5_aug3")
         #model.plot_pretrain_stats(show_on_screen=True, save_image=False)
         model.plot_train_stats(show_on_screen=True, save_image=False)
 
@@ -290,7 +287,7 @@ def main():
         data_loader = DataLoader(cache_key="all")
         data_loader.prepare()
 
-        model = Network(data_loader, cache_idx="test_adam_5e-5_aug2")
+        model = Network(data_loader, cache_idx="test_adam_5e-5_aug3")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9))
 
         model.predict(subset="validation")
@@ -327,9 +324,9 @@ def main():
     #_test_pretrain_baseline()
     #_run_training_detonly()
     #_run_training()
-    _run_training2()
+    #_run_training2()
     #_show_stats()
-    #_test_model()
+    _test_model()
     #_find_ap()
 
 if __name__ == "__main__":

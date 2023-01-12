@@ -20,7 +20,7 @@ class AnchorFinder:
         for img_d in img_info["train"].values():
             for bbox_d in img_d["objs"]:
 
-                self.bbox.append((bbox_d["bbox"][2], bbox_d["bbox"][3]))
+                self.bbox.append((bbox_d[3], bbox_d[4]))
 
         self.ROUNDS = 64
         '''

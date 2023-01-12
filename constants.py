@@ -82,6 +82,7 @@ COMPRESS_DATA_CACHE = True
 '''
 
 IMG_SIZE = (416, 416)
+#IMG_SIZE = (605, 605)
 '''
     fixed image input size
 '''
@@ -99,6 +100,7 @@ PRETRAIN_BOX_SIZE = (128, 128)
 assert(PRETRAIN_BOX_SIZE <= IMG_SIZE)
 
 GRID_CELL_CNT = [13, 26, 52]
+#GRID_CELL_CNT = [19, 38, 76]
 '''
     for each scale, the value of S
 '''
