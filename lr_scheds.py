@@ -33,11 +33,8 @@ class Lr_linear_decay:
         return lr
 
 class Lr_cosine_decay:
-    '''
-        NOTE: decay every epoch, not batch
-    '''
 
-    def __init__(self, min_lr, max_lr, period):
+    def __init__(self, min_lr, max_lr, period, b2e):
 
         self.period = period
 
@@ -46,7 +43,13 @@ class Lr_cosine_decay:
 
         self.PI = tf.constant(np.pi)
 
+        self.b2e = b2e
+
     def __call__(self, epoch, batch_idx, lr):
+
+        epoch %= self.period
+
+        epoch += batch_idx * self.b2e
         return self.min_lr + 1 / 2 * (self.max_lr - self.min_lr) * (1 + tf.cos(self.PI * (epoch / self.period)))
 
 class Triangular_rate_policy:
