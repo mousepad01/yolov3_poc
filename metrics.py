@@ -3,7 +3,7 @@ import tensorflow as tf
 from constants import *
 from utils import *
 
-@tf.function
+#@tf.function
 def yolov3_loss_perscale(output, obj_mask, ignored_mask, target_mask, anchors, gt_boxes):
     '''
         raw output: B x S x S x (A * (C + 5))
@@ -13,10 +13,10 @@ def yolov3_loss_perscale(output, obj_mask, ignored_mask, target_mask, anchors, g
 
         ignored_mask: B x S x S x A x 1
 
-        target_mask: B x S x S x A x (4 + C)
-        (last dimension: tx, ty, tw, th, p0, p1, ...p(C-1))
+        target_mask: B x S x S x A x 5
+        (last dimension: tx, ty, tw, th, class)
 
-        anchors: 1 x 1 x 1 x A x 2
+        anchors: A x 2
 
         gt_boxes: 1 x 1 x 1 x 1 x GT x 4
     '''
@@ -88,6 +88,7 @@ def yolov3_loss_perscale(output, obj_mask, ignored_mask, target_mask, anchors, g
     output_class_p = tf.keras.activations.softmax(output[..., 5:])
     target_class = target_mask[..., 4]
     target_class = tf.one_hot(tf.cast(target_class, dtype=tf.int32), CLS_CNT)
+    target_class = target_class * (1 - SMOOTH_EPS) + (1 - target_class) * (SMOOTH_EPS / (CLS_CNT - 1))
     classification_loss = obj_mask * tf.expand_dims(tf.keras.losses.categorical_crossentropy(target_class, output_class_p), axis=-1)
     classification_loss = CLASSIF_COEFF * tf.math.reduce_sum(classification_loss)
 

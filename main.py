@@ -293,7 +293,7 @@ def main():
         ap_50 = model.get_ap(0.5)
         tf.print(f"\nAP50: {ap_50}")
 
-    #_test_mask_encoding()
+    _test_mask_encoding()
     #_test_loss()
     #_test_boxes()
     #_test_for_nan_inf()
@@ -303,7 +303,7 @@ def main():
     #_run_training()
     #_run_training2()
     #_show_stats()
-    _test_model()
+    #_test_model()
     #_find_ap()
 
 if __name__ == "__main__":

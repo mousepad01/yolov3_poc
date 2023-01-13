@@ -113,6 +113,8 @@ class DataLoader:
         self._an_area = None
         self._ans_rel = None
 
+        self._img_keys = {"train": 0, "validation": 0}
+
     def prepare(self):
         '''
             Prepare everything for detection training/validation/testing, 
@@ -272,6 +274,21 @@ class DataLoader:
 
             return img, self.create_gt(rotated_objs)
 
+        def _mixup(img, purpose, img_id):
+
+            mixup_coef = np.random.beta(1.5, 1.5)
+
+            other_id = random.choice(self._img_keys[purpose])
+            other = self.cache_manager.get_img(other_id, purpose)
+            other = np.array(other)
+
+            new_objs = self.imgs[purpose][img_id]["objs"] + self.imgs[purpose][other_id]["objs"]
+
+            img = img * mixup_coef + other * (1 - mixup_coef)
+            img = np.ndarray.astype(img, np.uint8)
+
+            return img, self.create_gt(new_objs)
+
         # unused
         def _flip_channels(img):
             
@@ -284,19 +301,25 @@ class DataLoader:
 
         a = random.random()
         if a < 0.5:
-            image, ground_truth = _shearing(image, purpose, img_id)
-        else:
-            image, ground_truth = _rotation(image, purpose, img_id)
 
-        a = random.random()
-        if a < 0.5:
-            image, ground_truth = _flip_leftright(image, ground_truth)
+            a = random.random()
+            if a < 0.5:
+                image, ground_truth = _shearing(image, purpose, img_id)
+            else:
+                image, ground_truth = _rotation(image, purpose, img_id)
 
-        a = random.random()
-        if a < 0.5:
-            return tf.convert_to_tensor(_blur_contrast(image)), ground_truth
-        else:
-            return tf.convert_to_tensor(_noise_contrast(image)), ground_truth
+            a = random.random()
+            if a < 0.5:
+                image, ground_truth = _flip_leftright(image, ground_truth)
+
+            a = random.random()
+            if a < 0.5:
+                return tf.convert_to_tensor(_blur_contrast(image)), ground_truth
+            else:
+                return tf.convert_to_tensor(_noise_contrast(image)), ground_truth
+
+        image, ground_truth = _mixup(image, purpose, img_id)
+        return tf.convert_to_tensor(image), ground_truth
 
     def load_data(self, batch_size, purpose, shuffle=True, augment_probability=0.8):
         '''
@@ -310,7 +333,7 @@ class DataLoader:
             random.shuffle(keys)
 
         # FIXME
-        #yield keys
+        yield keys
 
         current_img_loaded = []
         current_om_loaded = [[] for _ in range(SCALE_CNT)]
@@ -616,6 +639,9 @@ class DataLoader:
             for img_id in self.imgs[purpose].keys():
 
                 self.max_true_boxes = max(len(self.imgs[purpose][img_id]["objs"]), self.max_true_boxes)
+
+        self._img_keys["train"] = list(self.imgs["train"].keys())
+        self._img_keys["validation"] = list(self.imgs["validation"].keys())
 
         tf.print(f"Loaded {self.get_img_cnt('train')} train images ({self._box_cnt['train']} train boxes) and {self.get_img_cnt('validation')} validation images ({self._box_cnt['validation']} validation boxes).")
 

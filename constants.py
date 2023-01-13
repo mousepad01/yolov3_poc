@@ -115,6 +115,16 @@ ANCHOR_PERSCALE_CNT = 3
     numbers of anchor types per scale (A dimension)
 '''
 
+SMOOTH_EPS = 0.05
+'''
+    value for label smoothing for classification
+'''
+
+MIXUP_BETA_PARAM = 1.5
+'''
+    parameter for beta distribution for mixup data augmentation
+'''
+
 IGNORED_IOU_THRESHOLD = 0.5
 '''
     min IOU for non-assigned anchors or predictions, for them to be completely ignored in loss function

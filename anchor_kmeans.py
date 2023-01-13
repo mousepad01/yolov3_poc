@@ -67,7 +67,7 @@ class AnchorFinder:
 
         k = SCALE_CNT * ANCHOR_PERSCALE_CNT
 
-        means = np.random.uniform(0, 416, size=(k, 2))
+        means = np.random.uniform(0, IMG_SIZE[0], size=(k, 2))
 
         for _ in range(self.ROUNDS):
 
