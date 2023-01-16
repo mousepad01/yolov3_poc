@@ -333,7 +333,7 @@ class DataLoader:
             random.shuffle(keys)
 
         # FIXME
-        yield keys
+        #yield keys
 
         current_img_loaded = []
         current_om_loaded = [[] for _ in range(SCALE_CNT)]

@@ -255,7 +255,7 @@ def main():
     def _show_stats():
 
         data_loader = DataLoader(cache_key="all")
-        model = Network(data_loader, cache_idx="test_adam_1e-5_aug3")
+        model = Network(data_loader, cache_idx="test_adam_1e-5_mixup")
         #model.plot_pretrain_stats(show_on_screen=True, save_image=False)
         model.plot_train_stats(show_on_screen=True, save_image=False)
 
@@ -293,7 +293,7 @@ def main():
         ap_50 = model.get_ap(0.5)
         tf.print(f"\nAP50: {ap_50}")
 
-    _test_mask_encoding()
+    #_test_mask_encoding()
     #_test_loss()
     #_test_boxes()
     #_test_for_nan_inf()
@@ -302,7 +302,7 @@ def main():
     #_run_training_detonly()
     #_run_training()
     #_run_training2()
-    #_show_stats()
+    _show_stats()
     #_test_model()
     #_find_ap()
 
