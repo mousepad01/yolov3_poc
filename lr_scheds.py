@@ -51,6 +51,34 @@ class Lr_cosine_decay:
 
         epoch += batch_idx * self.b2e
         return self.min_lr + 1 / 2 * (self.max_lr - self.min_lr) * (1 + tf.cos(self.PI * (epoch / self.period)))
+    
+class Lr_cosine_decay_warmup:
+
+    def __init__(self, min_lr, max_lr, period, b2e, warmup_bcnt):
+
+        self.period = period
+
+        self.min_lr = min_lr
+        self.max_lr = max_lr
+
+        self.PI = tf.constant(np.pi)
+
+        self.b2e = b2e
+
+        self.warmup_ecnt = warmup_bcnt * self.b2e
+        assert(self.warmup_ecnt < self.period)
+        self.period -= self.warmup_ecnt
+
+    def __call__(self, epoch, batch_idx, lr):
+
+        epoch %= self.period
+        epoch += batch_idx * self.b2e
+
+        if epoch <= self.warmup_ecnt:
+            return (epoch / self.warmup_ecnt) * self.max_lr
+        
+        epoch -= self.warmup_ecnt
+        return self.min_lr + 1 / 2 * (self.max_lr - self.min_lr) * (1 + tf.cos(self.PI * (epoch / self.period)))
 
 class Triangular_rate_policy:
 

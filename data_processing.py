@@ -196,8 +196,8 @@ class DataLoader:
 
         def _shearing(img, purpose, img_id):
             
-            sh_x = random.random() / 5
-            sh_y = random.random() / 5
+            sh_x = random.random() / 4
+            sh_y = random.random() / 4
 
             shearing_mat = np.float32( [[1,    sh_y, 0],
                                         [sh_x, 1,    0],
@@ -221,7 +221,7 @@ class DataLoader:
 
         def _rotation(img, purpose, img_id):
             
-            alpha = (random.random() * 2 / 3) - 0.33
+            alpha = (random.random() * 4 / 5) - 0.4
             cos = np.cos(alpha)
             sin = np.sin(alpha)
 
@@ -300,7 +300,7 @@ class DataLoader:
         image = np.array(image)
 
         a = random.random()
-        if a < 0.5:
+        if a < 0.75:
 
             a = random.random()
             if a < 0.5:
@@ -639,6 +639,8 @@ class DataLoader:
             for img_id in self.imgs[purpose].keys():
 
                 self.max_true_boxes = max(len(self.imgs[purpose][img_id]["objs"]), self.max_true_boxes)
+
+        self.max_true_boxes *= 2
 
         self._img_keys["train"] = list(self.imgs["train"].keys())
         self._img_keys["validation"] = list(self.imgs["validation"].keys())

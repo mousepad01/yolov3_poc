@@ -210,52 +210,88 @@ def main():
 
         print(val_loss, train_loss, val_acc, train_acc)            
 
-    def _run_training_detonly():
-
-        data_loader = DataLoader(cache_key="all")
-        data_loader.prepare()
-
-        LR_CH1 = 60
-        LR_CH2 = 90
-        LR_CH3 = 200
-
-        lrs = {e: 1e-3 for e in range(LR_CH1)}
-        lrs.update({e: 1e-4 for e in range(LR_CH1, LR_CH2)})
-        lrs.update({e: 1e-5 for e in range(LR_CH2, LR_CH3)})
-
-        lr_sched = Lr_dict_sched(lrs)
-        ch_sched = Minloss_checkpoint([x for x in range(10, 160, 10)])
-
-        model = Network(data_loader, cache_idx="sgd_burnin0")
-        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.SGD(1e-3, 0.9), lr_scheduler=lr_sched, 
-                                pretrain_optimizer=tf.keras.optimizers.SGD(1e-3, 0.9), pretrain_lr_scheduler=lr_sched)
-        #model.pretrain_encoder(10, 32, progbar=True)
-        model.train(160, 64, progbar=True, checkpoint_sched=ch_sched, copy_at_checkpoint=False)
-
     def _run_training():
+        # 0.75
 
         data_loader = DataLoader(cache_key="all")
         data_loader.prepare()
 
-        EPOCHS = 160
+        EPOCHS = 100
         P_EPOCHS = 3
 
-        lr_sched = Lr_cosine_decay(1e-6, 1e-5, EPOCHS)
+        BSIZE = 32
+
+        img_cnt = data_loader.get_img_cnt("train")
+        b2e = BSIZE / img_cnt
+
+        lr_sched = Lr_cosine_decay(1e-6, 5e-5, EPOCHS, b2e)
 
         p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
         p_lr_sched = Lr_dict_sched(p_lrs)
 
         ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
 
-        model = Network(data_loader, cache_idx="test_adam_1e-5_aug3")
+        model = Network(data_loader, cache_idx="test_adam_5e-5_mixup")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), lr_scheduler=lr_sched, 
+                                pretrain_optimizer=tf.optimizers.SGD(1e-2, momentum=0.9, nesterov=True), pretrain_lr_scheduler=p_lr_sched)
+        model.train(EPOCHS, BSIZE, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=True, save_on_keyboard_interrupt=False)
+
+    def _run_training2():
+        #0.5
+
+        data_loader = DataLoader(cache_key="all")
+        data_loader.prepare()
+
+        EPOCHS = 100
+        P_EPOCHS = 3
+
+        BSIZE = 32
+
+        img_cnt = data_loader.get_img_cnt("train")
+        b2e = BSIZE / img_cnt
+
+        lr_sched = Lr_cosine_decay(1e-6, 1e-5, EPOCHS, b2e)
+
+        p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
+        p_lr_sched = Lr_dict_sched(p_lrs)
+
+        ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
+
+        model = Network(data_loader, cache_idx="test_adam_1e-5_mixup")
         model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(1e-5), lr_scheduler=lr_sched, 
                                 pretrain_optimizer=tf.optimizers.SGD(1e-2, momentum=0.9, nesterov=True), pretrain_lr_scheduler=p_lr_sched)
-        model.train(EPOCHS, 32, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=False, save_on_keyboard_interrupt=False)
+        model.train(EPOCHS, BSIZE, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=True, save_on_keyboard_interrupt=False)
+
+    def _run_training3():
+        # 0.75
+
+        data_loader = DataLoader(cache_key="all")
+        data_loader.prepare()
+
+        EPOCHS = 100
+        P_EPOCHS = 3
+
+        BSIZE = 32
+
+        img_cnt = data_loader.get_img_cnt("train")
+        b2e = BSIZE / img_cnt
+
+        lr_sched = Lr_cosine_decay_warmup(1e-6, 7e-5, EPOCHS, b2e, 1000)
+
+        p_lrs = {e: 1e-3 for e in range(P_EPOCHS)}
+        p_lr_sched = Lr_dict_sched(p_lrs)
+
+        ch_sched = Minloss_checkpoint([x for x in range(10, EPOCHS, 1)])
+
+        model = Network(data_loader, cache_idx="test_adam_7e-5_mixup")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(7e-5), lr_scheduler=lr_sched, 
+                                pretrain_optimizer=tf.optimizers.SGD(1e-2, momentum=0.9, nesterov=True), pretrain_lr_scheduler=p_lr_sched)
+        model.train(EPOCHS, BSIZE, progbar=False, checkpoint_sched=ch_sched, copy_at_checkpoint=True, save_on_keyboard_interrupt=False)
 
     def _show_stats():
 
         data_loader = DataLoader(cache_key="all")
-        model = Network(data_loader, cache_idx="test_adam_1e-5_mixup")
+        model = Network(data_loader, cache_idx="test_adam_5e-5_mixup")
         #model.plot_pretrain_stats(show_on_screen=True, save_image=False)
         model.plot_train_stats(show_on_screen=True, save_image=False)
 
@@ -264,8 +300,8 @@ def main():
         data_loader = DataLoader(cache_key="all")
         data_loader.prepare()
 
-        model = Network(data_loader, cache_idx="test_adam_1e-5_aug3")
-        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(1e-5), pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9))
+        model = Network(data_loader, cache_idx="test_adam_5e-5_mixup_e45_vloss33.5985")
+        model.build_components(backbone="darknet-53", optimizer=tf.optimizers.Adam(5e-5), pretrain_optimizer=tf.optimizers.SGD(1e-3, momentum=0.9))
 
         model.predict(subset="validation")
 
@@ -302,8 +338,8 @@ def main():
     #_run_training_detonly()
     #_run_training()
     #_run_training2()
-    _show_stats()
-    #_test_model()
+    #_show_stats()
+    _test_model()
     #_find_ap()
 
 if __name__ == "__main__":
